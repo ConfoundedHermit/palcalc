@@ -705,7 +705,9 @@ namespace PalCalc.UI
                 IncludeCagedPals = obj["IncludeCagedPals"]?.ToObject<bool>() ?? true,
                 IncludeGlobalStoragePals = obj["IncludeGlobalStoragePals"]?.ToObject<bool>() ?? true,
                 IncludeExpeditionPals = obj["IncludeExpeditionPals"]?.ToObject<bool>() ?? true,
+                OnlyShowMissingPals = obj["OnlyShowMissingPals"]?.ToObject<bool>() ?? false,
                 CurrentResults = currentResults,
+
             };
         }
 
@@ -736,7 +738,9 @@ namespace PalCalc.UI
                 IncludeCagedPals = value.IncludeCagedPals,
                 IncludeGlobalStoragePals = value.IncludeGlobalStoragePals,
                 IncludeExpeditionPals = value.IncludeExpeditionPals,
+                OnlyShowMissingPals = value.OnlyShowMissingPals,
                 CurrentResults = value.CurrentResults
+
             });
 
             serializer.Converters.Remove(resultsConverter);

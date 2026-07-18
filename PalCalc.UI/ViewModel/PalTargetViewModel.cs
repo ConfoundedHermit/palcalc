@@ -66,6 +66,7 @@ namespace PalCalc.UI.ViewModel
             void RefreshOnChange(object sender, PropertyChangedEventArgs ev)
             {
                 CurrentPalSpecifier?.RefreshWith(AvailablePals);
+                OnPropertyChanged(nameof(TargetPalOptions));
             }
 
             PropertyChangedEventManager.AddHandler(sourceSave.Customizations, RefreshOnChange, nameof(sourceSave.Customizations.CustomContainers));
@@ -74,6 +75,9 @@ namespace PalCalc.UI.ViewModel
             PropertyChangedEventManager.AddHandler(CurrentPalSpecifier, RefreshOnChange, nameof(CurrentPalSpecifier.IncludeBasePals));
             PropertyChangedEventManager.AddHandler(CurrentPalSpecifier, RefreshOnChange, nameof(CurrentPalSpecifier.IncludeCustomPals));
             PropertyChangedEventManager.AddHandler(CurrentPalSpecifier, RefreshOnChange, nameof(CurrentPalSpecifier.IncludeGlobalStoragePals));
+            PropertyChangedEventManager.AddHandler(CurrentPalSpecifier, RefreshOnChange, nameof(CurrentPalSpecifier.IncludeExpeditionPals));
+            PropertyChangedEventManager.AddHandler(CurrentPalSpecifier, RefreshOnChange, nameof(CurrentPalSpecifier.OnlyShowMissingPals));
+
 
             PalSource.PropertyChanged += PalSource_PropertyChanged;
             
@@ -228,8 +232,26 @@ namespace PalCalc.UI.ViewModel
             }
         }
 
+        /// <summary>
+        /// The list of Pals shown in the Target Pal picker. Normally all Pals, but when
+        /// <see cref="Mapped.PalSpecifierViewModel.OnlyShowMissingPals"/> is enabled it's filtered down to
+        /// only species which aren't present in the currently-selected Source Pals.
+        /// </summary>
+        public IReadOnlyList<PalViewModel> TargetPalOptions
+        {
+            get
+            {
+                if (CurrentPalSpecifier?.OnlyShowMissingPals != true)
+                    return PalViewModel.All;
+
+                var ownedSpecies = AvailablePals.Select(p => p.Pal).ToHashSet();
+                return PalViewModel.All.Where(vm => !ownedSpecies.Contains(vm.ModelObject)).ToList();
+            }
+        }
+
         [ObservableProperty]
         private bool presetsMenuIsOpen = false;
+
 
         public IRelayCommand OpenPresetsMenuCommand { get; }
 

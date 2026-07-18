@@ -1041,7 +1041,12 @@ namespace PalCalc.UI.Localization {
         /// <summary>
         ///   Looks up a localized string similar to .
         /// </summary>
+        LC_TARGET_ONLY_MISSING_PALS,
+        /// <summary>
+        ///   Looks up a localized string similar to .
+        /// </summary>
         LC_TARGET_PAL,
+
         /// <summary>
         ///   Looks up a localized string similar to .
         /// </summary>

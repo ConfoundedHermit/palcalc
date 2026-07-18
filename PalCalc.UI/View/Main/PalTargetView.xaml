@@ -30,14 +30,19 @@
         </Grid.ColumnDefinitions>
         <StackPanel Grid.Column="0">
             <Label Content="{itl:LocalizedText LC_COMMON_PAL}" Style="{StaticResource ComboBoxAlignedLabelStyle}" />
-            <dnkc:AutoCompleteComboBox ItemsSource="{x:Static mvm:PalViewModel.All}" SelectedValue="{Binding CurrentPalSpecifier.TargetPal, Mode=TwoWay}" TextSearch.TextPath="Label.Value">
+            <dnkc:AutoCompleteComboBox ItemsSource="{Binding TargetPalOptions}" SelectedValue="{Binding CurrentPalSpecifier.TargetPal, Mode=TwoWay}" TextSearch.TextPath="Label.Value">
                 <dnkc:AutoCompleteComboBox.ItemTemplate>
                     <DataTemplate DataType="vm:PalViewModel">
                         <TextBlock Text="{Binding Label.Value}" />
                     </DataTemplate>
                 </dnkc:AutoCompleteComboBox.ItemTemplate>
             </dnkc:AutoCompleteComboBox>
+            <CheckBox Style="{StaticResource StandardCheckBoxStyle}" Margin="0,5,0,0"
+                      IsChecked="{Binding CurrentPalSpecifier.OnlyShowMissingPals}">
+                <TextBlock Text="{itl:LocalizedText LC_TARGET_ONLY_MISSING_PALS}" TextWrapping="Wrap" />
+            </CheckBox>
         </StackPanel>
+
         <StackPanel Grid.Column="2">
             <Label Content="{itl:LocalizedText Code=LC_COMMON_GENDER}" Style="{StaticResource ComboBoxAlignedLabelStyle}" />
             <ComboBox ItemsSource="{x:Static mvm:PalGenderViewModel.AllStandard}" SelectedValue="{Binding CurrentPalSpecifier.RequiredGender}">

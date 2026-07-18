@@ -850,9 +850,13 @@ Higher values linearly affect time required, depending on how many types of pals
   <data name="LC_SURGERY_REPLACE_PASSIVE" xml:space="preserve">
     <value>Replace {RemovedPassive} with {AddedPassive}</value>
   </data>
+  <data name="LC_TARGET_ONLY_MISSING_PALS" xml:space="preserve">
+    <value>Only show Pals missing from Source Pals</value>
+  </data>
   <data name="LC_TARGET_PAL" xml:space="preserve">
     <value>Target Pal</value>
   </data>
+
   <data name="LC_TARGET_PALS" xml:space="preserve">
     <value>Target Pals</value>
   </data>
