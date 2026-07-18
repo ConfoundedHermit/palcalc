@@ -12,7 +12,9 @@
       xmlns:adonisExtensions="clr-namespace:AdonisUI.Extensions;assembly=AdonisUI"
       xmlns:adonisUi="clr-namespace:AdonisUI;assembly=AdonisUI"
       xmlns:vu="clr-namespace:PalCalc.UI.View.Utils"
+      xmlns:materialIcons="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
       xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+
       mc:Ignorable="d"
       d:Width="1280" d:Height="720"
       VerticalAlignment="Stretch"
@@ -22,7 +24,23 @@
         <c:ValueVisibilityConverter x:Key="VVC" />
         <c:ValueBoolConverter x:Key="NegatedVBC" Negate="True" />
     </Page.Resources>
+    <Page.Triggers>
+        <!--
+            Subtle, one-shot fade-in when the main page first appears
+            (Loading -> Main transition). Cheap and non-distracting;
+            purely visual, no behavior change.
+        -->
+        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+            <BeginStoryboard>
+                <Storyboard>
+                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1" Duration="0:0:0.25" />
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+    </Page.Triggers>
     <Border Padding="5">
+
         <DockPanel>
             <Menu DockPanel.Dock="Top" Background="{DynamicResource {x:Static adonisUi:Brushes.Layer2BackgroundBrush}}">
                 <MenuItem Header="{itl:LocalizedText LC_LANGUAGE}" ItemsSource="{Binding Locales}" Padding="5">
@@ -35,9 +53,20 @@
                         </Style>
                     </MenuItem.ItemContainerStyle>
                 </MenuItem>
+                <MenuItem Header="{itl:LocalizedText LC_THEME}" ItemsSource="{Binding Themes}" Padding="5">
+                    <MenuItem.ItemContainerStyle>
+                        <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                            <Setter Property="Header" Value="{Binding Label.Value}" />
+                            <Setter Property="IsCheckable" Value="True" />
+                            <Setter Property="IsChecked" Value="{Binding IsSelected}" />
+                            <Setter Property="Command" Value="{Binding SelectCommand}" />
+                        </Style>
+                    </MenuItem.ItemContainerStyle>
+                </MenuItem>
                 <MenuItem Header="Debug" Padding="5" Name="DebugMenuItem">
                     <MenuItem Header="Translation Debugger" Click="TranslationDebugger_Click" />
                 </MenuItem>
+
             </Menu>
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -51,14 +80,27 @@
                 <DockPanel Grid.Column="0">
                     <StackPanel DockPanel.Dock="Top" vu:StackPanelExtensions.Spacing="5">
                         <!-- "Save File" section -->
-                        <Expander Header="{itl:LocalizedText LC_SAVE_FILE}" IsExpanded="True" adonisExtensions:LayerExtension.IncreaseLayer="True">
+                        <Expander IsExpanded="True" adonisExtensions:LayerExtension.IncreaseLayer="True">
+                            <Expander.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <materialIcons:MaterialIcon Kind="ContentSaveOutline" Style="{StaticResource SectionHeaderIconStyle}" />
+                                    <TextBlock Text="{itl:LocalizedText LC_SAVE_FILE}" />
+                                </StackPanel>
+                            </Expander.Header>
                             <v:SaveSelectorView DataContext="{Binding SaveSelection}" AllowNavigation="{Binding RelativeSource={RelativeSource AncestorType=local:MainPage}, Path=DataContext.SolverQueue.QueuedItems.Count, Converter={StaticResource NegatedVBC}}" />
                         </Expander>
 
                         <!-- "Game Settings" section -->
-                        <Expander Header="{itl:LocalizedText LC_GAME_SETTINGS}" IsExpanded="True" adonisExtensions:LayerExtension.IncreaseLayer="True">
+                        <Expander IsExpanded="True" adonisExtensions:LayerExtension.IncreaseLayer="True">
+                            <Expander.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <materialIcons:MaterialIcon Kind="CogOutline" Style="{StaticResource SectionHeaderIconStyle}" />
+                                    <TextBlock Text="{itl:LocalizedText LC_GAME_SETTINGS}" />
+                                </StackPanel>
+                            </Expander.Header>
                             <v:GameSettingsView DataContext="{Binding SelectedGameSettings}" />
                         </Expander>
+
                     </StackPanel>
 
                     <Grid Margin="0,5,0,0">
@@ -68,9 +110,16 @@
                         </Grid.RowDefinitions>
 
                         <!-- "Target Pals" section -->
-                        <GroupBox Header="{itl:LocalizedText LC_TARGET_PALS}" Grid.Row="0">
+                        <GroupBox Grid.Row="0">
+                            <GroupBox.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <materialIcons:MaterialIcon Kind="BullseyeArrow" Style="{StaticResource SectionHeaderIconStyle}" />
+                                    <TextBlock Text="{itl:LocalizedText LC_TARGET_PALS}" />
+                                </StackPanel>
+                            </GroupBox.Header>
                             <v:PalTargetListView BorderThickness="0" DataContext="{Binding PalTargetList}" />
                         </GroupBox>
+
 
                         <Grid Visibility="{Binding SolverQueue.QueuedItems.Count, Converter={StaticResource VVC}}" Grid.Row="1">
                             <Grid.RowDefinitions>
@@ -111,14 +160,15 @@
                     <StackPanel DockPanel.Dock="Bottom"
                                 Visibility="{Binding PalTarget.CurrentPalSpecifier.LatestJob, Converter={StaticResource VVC}, FallbackValue=Collapsed, Mode=OneWay}"
                                 >
+                        <Grid Margin="0,0,0,2">
+                            <ProgressBar Height="22" Value="{Binding PalTarget.CurrentPalSpecifier.LatestJob.SolverProgress, Mode=OneWay}" adonisExtensions:ProgressBarExtension.IsProgressAnimationEnabled="False" />
+                            <TextBlock Text="{Binding PalTarget.CurrentPalSpecifier.LatestJob.SolverStatusMessage.Value}" Style="{StaticResource ProgressOverlayTextStyle}" />
+                        </Grid>
                         <Grid>
-                            <ProgressBar Value="{Binding PalTarget.CurrentPalSpecifier.LatestJob.SolverProgress, Mode=OneWay}" adonisExtensions:ProgressBarExtension.IsProgressAnimationEnabled="False" />
-                            <TextBlock Text="{Binding PalTarget.CurrentPalSpecifier.LatestJob.SolverStatusMessage.Value}" Margin="10,5,0,5" />
+                            <ProgressBar Height="22" Value="{Binding PalTarget.CurrentPalSpecifier.LatestJob.StepProgress, Mode=OneWay}" adonisExtensions:ProgressBarExtension.IsProgressAnimationEnabled="False" />
+                            <TextBlock Text="{Binding PalTarget.CurrentPalSpecifier.LatestJob.StepStatusMessage.Value}" Style="{StaticResource ProgressOverlayTextStyle}" />
                         </Grid>
-                        <Grid Margin="0,0,0,0">
-                            <ProgressBar Value="{Binding PalTarget.CurrentPalSpecifier.LatestJob.StepProgress, Mode=OneWay}" adonisExtensions:ProgressBarExtension.IsProgressAnimationEnabled="False" />
-                            <TextBlock Text="{Binding PalTarget.CurrentPalSpecifier.LatestJob.StepStatusMessage.Value}" Margin="10,5,0,5" />
-                        </Grid>
+
                     </StackPanel>
 
                     <!-- Graph view -->
@@ -137,15 +187,21 @@
                     </Grid.RowDefinitions>
 
                     <!-- "Target Pal" section -->
-                    <Expander Header="{itl:LocalizedText LC_TARGET_PAL}"
-                              Grid.Row="0"
+                    <Expander Grid.Row="0"
                               IsExpanded="True"
                               adonisExtensions:LayerExtension.IncreaseLayer="True"
                               >
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <materialIcons:MaterialIcon Kind="Target" Style="{StaticResource SectionHeaderIconStyle}" />
+                                <TextBlock Text="{itl:LocalizedText LC_TARGET_PAL}" />
+                            </StackPanel>
+                        </Expander.Header>
                         <Border IsEnabled="{Binding PalTarget.CanEdit}">
                             <v:PalTargetView DataContext="{Binding PalTarget}" />
                         </Border>
                     </Expander>
+
 
                     <Grid Grid.Row="1">
                         <Grid.RowDefinitions>
@@ -168,25 +224,25 @@
                                         <RowDefinition Height="*" />
                                     </Grid.RowDefinitions>
                                     <StackPanel Grid.Row="0" vu:StackPanelExtensions.Spacing="8">
-                                        <Label Content="{itl:LocalizedText Code=LC_SOURCE_PALS_FILTERS}" />
+                                        <Label Style="{StaticResource SectionHeaderLabelStyle}" Content="{itl:LocalizedText Code=LC_SOURCE_PALS_FILTERS}" />
                                         <StackPanel vu:StackPanelExtensions.Spacing="5">
-                                            <CheckBox VerticalAlignment="Center" IsChecked="{Binding PalTarget.CurrentPalSpecifier.IncludeGlobalStoragePals}">
+                                            <CheckBox Style="{StaticResource StandardCheckBoxStyle}" IsChecked="{Binding PalTarget.CurrentPalSpecifier.IncludeGlobalStoragePals}">
                                                 <TextBlock Text="{itl:LocalizedText Code=LC_INCLUDE_PALS_GPS}" TextWrapping="Wrap" />
                                             </CheckBox>
                                     
-                                            <CheckBox VerticalAlignment="Center" IsChecked="{Binding PalTarget.CurrentPalSpecifier.IncludeBasePals}">
+                                            <CheckBox Style="{StaticResource StandardCheckBoxStyle}" IsChecked="{Binding PalTarget.CurrentPalSpecifier.IncludeBasePals}">
                                                 <TextBlock Text="{itl:LocalizedText LC_INCLUDE_PALS_AT_BASE}" TextWrapping="Wrap" />
                                             </CheckBox>
 
-                                            <CheckBox VerticalAlignment="Center" IsChecked="{Binding PalTarget.CurrentPalSpecifier.IncludeCagedPals}">
+                                            <CheckBox Style="{StaticResource StandardCheckBoxStyle}" IsChecked="{Binding PalTarget.CurrentPalSpecifier.IncludeCagedPals}">
                                                 <TextBlock Text="{itl:LocalizedText Code=LC_INCLUDE_PALS_IN_CAGES}" TextWrapping="Wrap" />
                                             </CheckBox>
 
-                                            <CheckBox VerticalAlignment="Center" IsChecked="{Binding PalTarget.CurrentPalSpecifier.IncludeCustomPals}">
+                                            <CheckBox Style="{StaticResource StandardCheckBoxStyle}" IsChecked="{Binding PalTarget.CurrentPalSpecifier.IncludeCustomPals}">
                                                 <TextBlock Text="{itl:LocalizedText Code=LC_INCLUDE_CUSTOM_PALS}" TextWrapping="Wrap" />
                                             </CheckBox>
 
-                                            <CheckBox VerticalAlignment="Center" IsChecked="{Binding PalTarget.CurrentPalSpecifier.IncludeExpeditionPals}">
+                                            <CheckBox Style="{StaticResource StandardCheckBoxStyle}" IsChecked="{Binding PalTarget.CurrentPalSpecifier.IncludeExpeditionPals}">
                                                 <TextBlock Text="{itl:LocalizedText Code=LC_INCLUDE_PALS_ON_EXPEDITIONS}" TextWrapping="Wrap" />
                                             </CheckBox>
                                         </StackPanel>
@@ -195,7 +251,7 @@
                                     <Separator Grid.Row="1" Visibility="Hidden" Margin="0,10,0,10" />
 
                                     <StackPanel Grid.Row="2" vu:StackPanelExtensions.Spacing="5">
-                                        <Label Content="{itl:LocalizedText Code=LC_SOURCE_PALS_PLAYERS_AND_GUILDS}" />
+                                        <Label Style="{StaticResource SectionHeaderLabelStyle}" Content="{itl:LocalizedText Code=LC_SOURCE_PALS_PLAYERS_AND_GUILDS}" />
                                         <v:PalSourceTreeView DataContext="{Binding PalTarget.PalSource}">
                                             <v:PalSourceTreeView.Resources>
                                                 <Style TargetType="TreeView" BasedOn="{StaticResource {x:Type TreeView}}">
@@ -229,14 +285,25 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <TextBlock TextWrapping="Wrap" Visibility="{Binding ShowNoResultsNotice, Converter={StaticResource VVC}, FallbackValue=Collapsed}" Grid.Row="0" Padding="5">
-                                <Run Text="{itl:LocalizedText Code=LC_NO_RESULTS_FAQ_1}" />
-                                <Hyperlink NavigateUri="https://github.com/tylercamp/palcalc/wiki/Frequently-Asked-Questions#why-arent-i-getting-any-results"
-                                           RequestNavigate="Hyperlink_RequestNavigate">
-                                    <Run Text="{itl:LocalizedText Code=LC_NO_RESULTS_FAQ_2}" />
-                                </Hyperlink>
-                                <Run Text="{itl:LocalizedText Code=LC_NO_RESULTS_FAQ_3}" />
-                            </TextBlock>
+                            <StackPanel Orientation="Horizontal"
+                                        Grid.Row="0"
+                                        Margin="5"
+                                        Visibility="{Binding ShowNoResultsNotice, Converter={StaticResource VVC}, FallbackValue=Collapsed}">
+                                <materialIcons:MaterialIcon Kind="InformationOutline"
+                                                            Width="16" Height="16"
+                                                            VerticalAlignment="Top"
+                                                            Margin="0,2,6,0"
+                                                            Foreground="{DynamicResource {x:Static adonisUi:Brushes.HyperlinkBrush}}" />
+                                <TextBlock TextWrapping="Wrap">
+                                    <Run Text="{itl:LocalizedText Code=LC_NO_RESULTS_FAQ_1}" />
+                                    <Hyperlink NavigateUri="https://github.com/tylercamp/palcalc/wiki/Frequently-Asked-Questions#why-arent-i-getting-any-results"
+                                               RequestNavigate="Hyperlink_RequestNavigate">
+                                        <Run Text="{itl:LocalizedText Code=LC_NO_RESULTS_FAQ_2}" />
+                                    </Hyperlink>
+                                    <Run Text="{itl:LocalizedText Code=LC_NO_RESULTS_FAQ_3}" />
+                                </TextBlock>
+                            </StackPanel>
+
 
                             <!-- Solver Results -->
                             <GroupBox Header="{Binding PalTarget.CurrentPalSpecifier.CurrentResults.ResultsHeading.Value, FallbackValue=''}" Grid.Row="1">
@@ -247,8 +314,12 @@
 
                     <!-- About button / Update Notice -->
                     <StackPanel Grid.Row="2">
-                        <Button Width="50" Click="AboutButton_Click" Margin="0,5,0,5" Content="{itl:LocalizedText LC_ABOUT_APP}" />
-                        <TextBlock Visibility="{Binding UpdatesMessageVisibility}" TextWrapping="Wrap" TextAlignment="Center" FontSize="20">
+                        <Button Click="AboutButton_Click"
+                                Margin="{StaticResource Thickness.SM}"
+                                HorizontalAlignment="Left"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Content="{itl:LocalizedText LC_ABOUT_APP}" />
+                        <TextBlock Visibility="{Binding UpdatesMessageVisibility}" TextWrapping="Wrap" TextAlignment="Center" FontSize="{StaticResource FontSize.Header}">
                             <!-- NavigateUri unused, value must be set for event to trigger -->
                             <Hyperlink NavigateUri="http://github.com" RequestNavigate="DownloadUpdateLink_RequestNavigate">
                                 <TextBlock Text="{itl:LocalizedText LC_UPDATE_AVAILABLE}" />

@@ -18,11 +18,11 @@
         <BooleanToVisibilityConverter x:Key="BVC" />
 
         <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource {x:Type TextBlock}}">
-            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontSize" Value="{StaticResource FontSize.Caption}" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style TargetType="{x:Type vp:PalIVsView}">
-            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontSize" Value="{StaticResource FontSize.Caption}" />
             <Setter Property="FontWeight" Value="Bold" />
         </Style>
         <Style TargetType="{x:Type vp:PassiveSkillCollectionView}">
@@ -40,7 +40,7 @@
             Text="{Binding Label.Value}"
             HorizontalAlignment="Center"
             FontWeight="Bold"
-            FontSize="14"
+            FontSize="{StaticResource FontSize.Subtitle}"
             />
         
         <Grid
@@ -105,7 +105,7 @@
                         <TextBlock
                             Text="{Binding TargetPal.Name.Value}"
                             FontWeight="Bold"
-                            FontSize="14"
+                            FontSize="{StaticResource FontSize.Subtitle}"
                             />
 
                         <vp:PalGenderView
@@ -120,12 +120,10 @@
                         VerticalAlignment="Center"
                         HorizontalAlignment="Right"
                         PreviewMouseDown="Image_PreviewMouseDown"
-                        Cursor="Hand"
-                        Background="{x:Null}"
-                        BorderBrush="{x:Null}"
                         >
+
                         <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Style TargetType="Button" BasedOn="{StaticResource IconButtonStyle}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding LatestJob.IsActive}" Value="True">
                                         <Setter Property="Visibility" Value="Hidden" />
@@ -134,11 +132,12 @@
                             </Style>
                         </Button.Style>
                         <materialIcons:MaterialIcon
-                            Kind="Remove"
+                            Kind="Close"
                             Width="15"
                             Foreground="{DynamicResource {x:Static adonisUi:Brushes.ErrorBrush}}"
                             />
                     </Button>
+
                 </Grid>
 
                 <TextBlock

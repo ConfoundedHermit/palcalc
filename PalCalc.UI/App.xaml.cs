@@ -40,7 +40,21 @@ namespace PalCalc.UI
 
             Storage.Init();
 
+            // Apply the persisted color scheme (theme) before the first window
+            // renders, so there's no flash of the default dark theme when the
+            // user has chosen light. Failures here must never block startup.
+            try
+            {
+                var startupSettings = Storage.LoadAppSettings();
+                ThemeManager.Apply(startupSettings.Theme);
+            }
+            catch (Exception ex)
+            {
+                Log.ForContext<App>().Warning(ex, "failed to apply persisted theme at startup; using default");
+            }
+
             if (!Directory.Exists(LogFolder)) Directory.CreateDirectory(LogFolder);
+
 
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Verbose()

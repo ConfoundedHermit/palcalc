@@ -842,7 +842,17 @@ Higher values linearly affect time required, depending on how many types of pals
   <data name="LC_TARGET_PALS" xml:space="preserve">
     <value>Target Pals</value>
   </data>
+  <data name="LC_THEME" xml:space="preserve">
+    <value>Theme</value>
+  </data>
+  <data name="LC_THEME_DARK" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="LC_THEME_LIGHT" xml:space="preserve">
+    <value>Light</value>
+  </data>
   <data name="LC_TRAITS_COUNT_EMPTY" xml:space="preserve">
+
     <value>no passives</value>
   </data>
   <data name="LC_TRAITS_COUNT_RANDOM" xml:space="preserve">

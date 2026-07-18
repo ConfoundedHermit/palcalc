@@ -77,6 +77,9 @@ namespace PalCalc.UI.Model
 
         public TranslationLocale Locale { get; set; } = TranslationLocale.en;
 
+        public AppTheme Theme { get; set; } = AppTheme.Dark;
+
         public BreedingResultListColumnSettings BreedingResultListColumns { get; set; } = new();
+
     }
 }

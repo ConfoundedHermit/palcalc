@@ -65,6 +65,12 @@
         <Setter Property="Padding" Value="7,0,0,4" />
     </Style>
 
+    <!--
+        Color overrides mapped to the consolidated semantic palette in
+        DesignTokens.xaml (merged before this dictionary). Keeping these
+        as StaticResource references means there is a single source of
+        truth for warning/error/info colors.
+    -->
     <Color x:Key="{x:Static adonisUi:Colors.AlertColor}">#D49220</Color>
     <Color x:Key="{x:Static adonisUi:Colors.ErrorColor}">#FF3939</Color>
     <Color x:Key="{x:Static adonisUi:Colors.HyperlinkColor}">#5CA8FF</Color>

@@ -10,6 +10,10 @@
                 <ResourceDictionary Source="pack://application:,,,/AdonisUI;component/ColorSchemes/Dark.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/AdonisUI.ClassicTheme;component/Resources.xaml"/>
 
+                <!-- Pal Calc design system (Phase 1) — DesignTokens must precede ControlStyles -->
+                <ResourceDictionary Source="Themes/DesignTokens.xaml" />
+                <ResourceDictionary Source="Themes/ControlStyles.xaml" />
+
                 <ResourceDictionary Source="Themes/StyleAdjustments.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>

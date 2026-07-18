@@ -547,7 +547,17 @@
   <data name="LC_TARGET_PALS" xml:space="preserve">
     <value />
   </data>
+  <data name="LC_THEME" xml:space="preserve">
+    <value />
+  </data>
+  <data name="LC_THEME_DARK" xml:space="preserve">
+    <value />
+  </data>
+  <data name="LC_THEME_LIGHT" xml:space="preserve">
+    <value />
+  </data>
   <data name="LC_TRAITS_COUNT_EMPTY" xml:space="preserve">
+
     <value />
   </data>
   <data name="LC_TRAITS_COUNT_RANDOM" xml:space="preserve">

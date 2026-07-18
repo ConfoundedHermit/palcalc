@@ -62,6 +62,13 @@ namespace PalCalc.UI.ViewModel
                 .Select(l => new TranslationLocaleViewModel(l))
                 .ToList();
 
+        public List<ThemeSelectionViewModel> Themes { get; } =
+            Enum
+                .GetValues<AppTheme>()
+                .Select(t => new ThemeSelectionViewModel(t))
+                .ToList();
+
+
         public MainWindowViewModel() : this(null, null) { }
 
         // main app model

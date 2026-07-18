@@ -1,0 +1,212 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:adonisUi="clr-namespace:AdonisUI;assembly=AdonisUI"
+                    xmlns:adonisExtensions="clr-namespace:AdonisUI.Extensions;assembly=AdonisUI"
+                    xmlns:materialIcons="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF">
+
+
+    <!--
+        ============================================================
+        ControlStyles.xaml — Pal Calc design system (Phase 1)
+        ============================================================
+        Reusable, opt-in control styles built on DesignTokens.xaml and
+        AdonisUI brush keys. These are ADDITIVE:
+          - Every style has an explicit x:Key (opt-in via Style="{...}").
+          - No implicit (keyless) styles that would retarget all controls.
+          - No ViewModel or behavior changes.
+
+        Depends on DesignTokens.xaml being merged first (for Space.*,
+        CornerRadius.*, FontSize.*, FontWeight.* keys).
+        ============================================================
+    -->
+
+    <!-- ==================== Surfaces: Card / Section ==================== -->
+    <!--
+        CardBorderStyle: a rounded, layered container for grouping related
+        content. Use as: <Border Style="{StaticResource CardBorderStyle}">
+    -->
+    <Style x:Key="CardBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource {x:Static adonisUi:Brushes.Layer1BackgroundBrush}}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource {x:Static adonisUi:Brushes.Layer1BorderBrush}}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadius.Large}" />
+        <Setter Property="Padding" Value="{StaticResource Padding.Card}" />
+    </Style>
+
+    <!--
+        SectionBorderStyle: a subtler surface for inner groupings; flatter
+        than a card, useful for nested sections inside a card.
+    -->
+    <Style x:Key="SectionBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource {x:Static adonisUi:Brushes.Layer0BackgroundBrush}}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource {x:Static adonisUi:Brushes.Layer0BorderBrush}}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadius.Medium}" />
+        <Setter Property="Padding" Value="{StaticResource Padding.Section}" />
+    </Style>
+
+    <!-- ==================== Typography helpers ==================== -->
+    <!-- Section-header text (e.g. group titles). -->
+    <Style x:Key="SectionHeaderTextStyle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Subtitle}" />
+        <Setter Property="FontWeight" Value="{StaticResource FontWeight.Semibold}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Title text (larger, e.g. target pal name). -->
+    <Style x:Key="TitleTextStyle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Title}" />
+        <Setter Property="FontWeight" Value="{StaticResource FontWeight.Bold}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Caption / secondary text. -->
+    <Style x:Key="CaptionTextStyle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Caption}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Body text. -->
+    <Style x:Key="BodyTextStyle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Section-header label (for Label controls, aligned for combobox rows). -->
+    <Style x:Key="SectionHeaderLabelStyle" TargetType="Label" BasedOn="{StaticResource {x:Type Label}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Subtitle}" />
+        <Setter Property="FontWeight" Value="{StaticResource FontWeight.Semibold}" />
+    </Style>
+
+    <!-- ==================== Buttons ==================== -->
+    <!--
+        PrimaryButtonStyle: emphasized action button. Uses AdonisUI accent.
+    -->
+    <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Padding" Value="12,5" />
+        <Setter Property="MinWidth" Value="72" />
+        <Setter Property="FontWeight" Value="{StaticResource FontWeight.Semibold}" />
+        <Setter Property="adonisExtensions:CornerRadiusExtension.CornerRadius" Value="{StaticResource CornerRadius.Medium}" />
+    </Style>
+
+    <!--
+        SecondaryButtonStyle: default-emphasis button with consistent padding.
+    -->
+    <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Padding" Value="12,5" />
+        <Setter Property="MinWidth" Value="72" />
+        <Setter Property="adonisExtensions:CornerRadiusExtension.CornerRadius" Value="{StaticResource CornerRadius.Medium}" />
+    </Style>
+
+    <!--
+        IconButtonStyle: borderless, transparent button for icon-only actions
+        (e.g. the "Remove" target button). Keeps hit target but no chrome,
+        with a subtle rounded hover/pressed highlight for affordance.
+    -->
+    <Style x:Key="IconButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{StaticResource CornerRadius.Small}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static adonisUi:Brushes.Layer2HighlightBrush}}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static adonisUi:Brushes.Layer2InteractionBrush}}" />
+                        </Trigger>
+
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ==================== CheckBox ==================== -->
+    <!-- Consistent vertically-centered checkbox with body-sized content. -->
+    <Style x:Key="StandardCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- ==================== Iconography ==================== -->
+    <!--
+        InfoIconStyle: a muted, inline "help/info" glyph placed next to a
+        setting label. Retains the tooltip on the element it decorates; the
+        icon itself just improves discoverability of that tooltip.
+        Use on a Material.Icons.WPF MaterialIcon (Kind="InformationOutline").
+    -->
+    <Style x:Key="InfoIconStyle" TargetType="materialIcons:MaterialIcon">
+        <Setter Property="Width" Value="14" />
+        <Setter Property="Height" Value="14" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource {x:Static adonisUi:Brushes.DisabledForegroundBrush}}" />
+        <Setter Property="Cursor" Value="Help" />
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+        <Setter Property="ToolTipService.InitialShowDelay" Value="200" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource {x:Static adonisUi:Brushes.HyperlinkBrush}}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ==================== Section header (icon + title) ==================== -->
+    <!--
+        SectionHeaderIconStyle: leading glyph shown before a section title so
+        Expander/GroupBox headers read consistently. Sized to the subtitle
+        typography scale.
+    -->
+    <Style x:Key="SectionHeaderIconStyle" TargetType="materialIcons:MaterialIcon">
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="Foreground" Value="{DynamicResource {x:Static adonisUi:Brushes.ForegroundBrush}}" />
+    </Style>
+
+    <!-- ==================== Progress overlay text ==================== -->
+    <!--
+        ProgressOverlayTextStyle: caption text drawn on top of a ProgressBar
+        (status message). Centered vertically with consistent inset.
+    -->
+    <Style x:Key="ProgressOverlayTextStyle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="10,0,10,0" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- ==================== Empty-state text ==================== -->
+    <!--
+        EmptyStateTextStyle: friendly, muted, centered copy for empty/no-result
+        surfaces (e.g. "no results yet" notices).
+    -->
+    <Style x:Key="EmptyStateTextStyle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <Setter Property="Foreground" Value="{DynamicResource {x:Static adonisUi:Brushes.DisabledForegroundBrush}}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+</ResourceDictionary>
+
+

@@ -9,13 +9,16 @@
              xmlns:itl="clr-namespace:PalCalc.UI.Localization"
              xmlns:local="clr-namespace:PalCalc.UI.View.Main"
              xmlns:adonisUi="clr-namespace:AdonisUI;assembly=AdonisUI"
+             xmlns:materialIcons="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
+
              mc:Ignorable="d" 
              d:DataContext="{x:Static vms:SolverControlsViewModel.DesignerInstance}"
              d:DesignWidth="1000.621">
     <vu:SpacedWrapPanel Orientation="Horizontal" HorizontalSpacing="25" VerticalSpacing="15" HorizontalContentAlignment="{Binding RelativeSource={RelativeSource AncestorType=local:SolverControlsView}, Path=HorizontalContentAlignment}">
         <vu:SpacedWrapPanel.Resources>
-            <GridLength x:Key="SepHeight">5</GridLength>
-            <GridLength x:Key="SepWidth">10</GridLength>
+            <!-- Row/column separators use the shared spacing scale (DesignTokens.xaml) -->
+            <StaticResource x:Key="SepHeight" ResourceKey="GridLength.SM" />
+            <StaticResource x:Key="SepWidth" ResourceKey="GridLength.MD" />
 
             <Style TargetType="{x:Type vu:IntegerTextBox}">
                 <Setter Property="Width" Value="25" />
@@ -49,7 +52,11 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="{itl:LocalizedText Code=LC_SOLVER_SETTINGS_USE_GENDER_REVERSERS}" />
+            <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Text="{itl:LocalizedText Code=LC_SOLVER_SETTINGS_USE_GENDER_REVERSERS}" />
+                <materialIcons:MaterialIcon Kind="InformationOutline" Style="{StaticResource InfoIconStyle}" Margin="4,0,0,0"
+                                            ToolTipService.ToolTip="{itl:LocalizedText Code=LC_SOLVER_SETTINGS_USE_GENDER_REVERSERS_DESCRIPTION}" />
+            </StackPanel>
             <CheckBox
                 Grid.Row="0" Grid.Column="2"
                 IsChecked="{Binding UseGenderReversers, Mode=TwoWay}"
@@ -58,7 +65,12 @@
                 ToolTipService.ShowOnDisabled="True"
                 />
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Text="{itl:LocalizedText Code=LC_SOLVER_SETTINGS_MAX_GOLD_COST}"/>
+            <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Text="{itl:LocalizedText Code=LC_SOLVER_SETTINGS_MAX_GOLD_COST}"/>
+                <materialIcons:MaterialIcon Kind="InformationOutline" Style="{StaticResource InfoIconStyle}" Margin="4,0,0,0"
+                                            ToolTipService.ToolTip="{itl:LocalizedText Code=LC_SOLVER_SETTINGS_MAX_GOLD_COST_DESCRIPTION}" />
+            </StackPanel>
+
             <vu:IntegerTextBox
                 Grid.Row="2" Grid.Column="2"
                 Value="{Binding MaxGoldCost}"
