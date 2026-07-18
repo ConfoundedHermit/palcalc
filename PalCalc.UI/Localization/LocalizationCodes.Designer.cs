@@ -1001,6 +1001,24 @@ namespace PalCalc.UI.Localization {
         /// </summary>
         LC_SOURCE_PALS_PLAYERS_AND_GUILDS,
         /// <summary>
+        ///   Looks up a localized string similar to Select All.
+        /// </summary>
+        LC_SOURCE_PALS_SELECT_ALL,
+        /// <summary>
+        ///   Looks up a localized string similar to Select None.
+        /// </summary>
+        LC_SOURCE_PALS_SELECT_NONE,
+        /// <summary>
+        ///   Looks up a localized string similar to {Selected} of {Total} players.
+        /// </summary>
+        LC_SOURCE_PALS_SELECTION_SUMMARY,
+        /// <summary>
+        ///   Looks up a localized string similar to ({Count}).
+        /// </summary>
+        LC_SOURCE_PALS_NODE_COUNT,
+        /// <summary>
+
+
         ///   Looks up a localized string similar to .
         /// </summary>
         LC_STARTUP_LOADING,

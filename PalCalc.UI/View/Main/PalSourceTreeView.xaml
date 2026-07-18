@@ -33,15 +33,26 @@
 
             <HierarchicalDataTemplate DataType="{x:Type vms:GuildSourceTreeNodeViewModel}" ItemsSource="{Binding Children}">
                 <CheckBox>
-                    <TextBlock Text="{Binding Label.Value}" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Label.Value}" />
+                        <TextBlock Text="{Binding CountLabel.Value}"
+                                   Margin="5,0,0,0"
+                                   Opacity="0.6" />
+                    </StackPanel>
                 </CheckBox>
             </HierarchicalDataTemplate>
 
             <DataTemplate DataType="{x:Type vms:PlayerSourceTreeNodeViewModel}">
                 <CheckBox>
-                    <TextBlock Text="{Binding Label.Value}" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Label.Value}" />
+                        <TextBlock Text="{Binding CountLabel.Value}"
+                                   Margin="5,0,0,0"
+                                   Opacity="0.6" />
+                    </StackPanel>
                 </CheckBox>
             </DataTemplate>
+
         </TreeView.Resources>
     </TreeView>
 </UserControl>

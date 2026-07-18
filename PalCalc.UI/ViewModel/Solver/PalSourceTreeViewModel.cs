@@ -1,5 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using PalCalc.Model;
+
 using PalCalc.SaveReader;
 using PalCalc.UI.Localization;
 using PalCalc.UI.Model;
@@ -35,13 +37,30 @@ namespace PalCalc.UI.ViewModel.Solver
     }
 
     
-    public partial class PlayerSourceTreeNodeViewModel(PlayerInstance player) : ObservableObject, IPalSourceTreeNode
+    public partial class PlayerSourceTreeNodeViewModel : ObservableObject, IPalSourceTreeNode
     {
+        private readonly PlayerInstance player;
+
+        public PlayerSourceTreeNodeViewModel(PlayerInstance player) : this(player, 0) { }
+
+        public PlayerSourceTreeNodeViewModel(PlayerInstance player, int palCount)
+        {
+            this.player = player;
+            Label = new HardCodedText(player.Name);
+            CountLabel = LocalizationCodes.LC_SOURCE_PALS_NODE_COUNT.Bind(palCount);
+        }
+
         public PlayerInstance ModelObject => player;
 
-        public ILocalizedText Label { get; } = new HardCodedText(player.Name);
+        public ILocalizedText Label { get; }
+
+        /// <summary>
+        /// "(N)" style count of Pals directly owned by this player, shown next to the name.
+        /// </summary>
+        public ILocalizedText CountLabel { get; }
 
         public IEnumerable<IPalSourceTreeNode> Children => [];
+
 
         [ObservableProperty]
         private bool? isChecked = true;
@@ -72,12 +91,26 @@ namespace PalCalc.UI.ViewModel.Solver
         {
             ModelObject = guild;
             Label = new HardCodedText(guild.Name);
+
+            // Count Pals directly owned by each player (party / palbox / dimensional storage).
+            // This is a quick "at a glance" figure to help the user pick meaningful sources;
+            // it intentionally doesn't try to replicate the full base/cage attribution used
+            // by the solver's SourceTreePlayerSelection.Matches.
+            var palCountByPlayer = source.OwnedPals
+                .Where(p => p.OwnerPlayerId != null)
+                .GroupBy(p => p.OwnerPlayerId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
             PlayerNodes = guild.MemberIds
-                .Select(pid => new PlayerSourceTreeNodeViewModel(source.PlayersById[pid]))
+                .Select(pid => new PlayerSourceTreeNodeViewModel(source.PlayersById[pid], palCountByPlayer.GetValueOrDefault(pid, 0)))
                 .OrderBy(n => n.ModelObject.Name)
                 .ToList();
 
+            var guildPalCount = guild.MemberIds.Sum(pid => palCountByPlayer.GetValueOrDefault(pid, 0));
+            CountLabel = LocalizationCodes.LC_SOURCE_PALS_NODE_COUNT.Bind(guildPalCount);
+
             Children = PlayerNodes.OfType<IPalSourceTreeNode>().ToList();
+
 
             foreach (var c in PlayerNodes)
             {
@@ -108,7 +141,13 @@ namespace PalCalc.UI.ViewModel.Solver
 
         public ILocalizedText Label { get; }
 
+        /// <summary>
+        /// "(N)" style count of Pals owned by all members of this guild, shown next to the name.
+        /// </summary>
+        public ILocalizedText CountLabel { get; }
+
         public List<PlayerSourceTreeNodeViewModel> PlayerNodes { get; }
+
         public IEnumerable<IPalSourceTreeNode> Children { get; }
 
         private bool? isChecked = true;
@@ -203,6 +242,31 @@ namespace PalCalc.UI.ViewModel.Solver
             {
                 PropertyChangedEventManager.AddHandler(node, Node_SelectionPropertyChanged, nameof(node.AsSelection));
             }
+
+            SelectAllCommand = new RelayCommand(
+                execute: () => SetAllChecked(true),
+                canExecute: () => !AllNodes.All(n => n.IsChecked == true)
+            );
+
+            SelectNoneCommand = new RelayCommand(
+                execute: () => SetAllChecked(false),
+                canExecute: () => AllNodes.Any(n => n.IsChecked != false)
+            );
+
+            RefreshSummary();
+        }
+
+        private void SetAllChecked(bool isChecked)
+        {
+            SuppressSelectionChangedDuring(() =>
+            {
+                foreach (var node in AllNodes)
+                    node.IsChecked = isChecked;
+            });
+
+            OnPropertyChanged(nameof(Selections));
+            OnPropertyChanged(nameof(HasValidSource));
+            RefreshSummary();
         }
 
         private void Node_SelectionPropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -211,8 +275,49 @@ namespace PalCalc.UI.ViewModel.Solver
             {
                 OnPropertyChanged(nameof(Selections));
                 OnPropertyChanged(nameof(HasValidSource));
+                RefreshSummary();
             }
         }
+
+        /// <summary>
+        /// Command which selects (checks) every guild and player in the tree.
+        /// </summary>
+        public IRelayCommand SelectAllCommand { get; }
+
+        /// <summary>
+        /// Command which deselects (unchecks) every guild and player in the tree.
+        /// </summary>
+        public IRelayCommand SelectNoneCommand { get; }
+
+        private ILocalizedText selectionSummary;
+        /// <summary>
+        /// Short "N of M players selected" summary shown in the section, so the user
+        /// can tell at a glance how many players contribute source Pals without
+        /// scanning every checkbox.
+        /// </summary>
+        public ILocalizedText SelectionSummary
+        {
+            get => selectionSummary;
+            private set => SetProperty(ref selectionSummary, value);
+        }
+
+        private void RefreshSummary()
+        {
+            var playerNodes = AllNodes.OfType<PlayerSourceTreeNodeViewModel>().ToList();
+            var selectedCount = playerNodes.Count(n => n.IsChecked == true);
+
+            SelectionSummary = LocalizationCodes.LC_SOURCE_PALS_SELECTION_SUMMARY.Bind(
+                new
+                {
+                    Selected = selectedCount,
+                    Total = playerNodes.Count
+                }
+            );
+
+            SelectAllCommand?.NotifyCanExecuteChanged();
+            SelectNoneCommand?.NotifyCanExecuteChanged();
+        }
+
 
         public List<IPalSourceTreeSelection> Selections
         {
@@ -239,10 +344,12 @@ namespace PalCalc.UI.ViewModel.Solver
                 });
                 OnPropertyChanged(nameof(Selections));
                 OnPropertyChanged(nameof(HasValidSource));
+                RefreshSummary();
             }
         }
 
         public bool HasValidSource => Selections.Any();
+
 
         public List<IPalSourceTreeNode> RootNodes { get; }
 

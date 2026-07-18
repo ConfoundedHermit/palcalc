@@ -211,7 +211,14 @@
                         </Grid.RowDefinitions>
 
                         <!-- "Source Pals" section -->
-                        <Expander Header="{itl:LocalizedText LC_SOURCE_PALS}" Grid.Row="0" Margin="0,5,0,0" Padding="0" IsExpanded="True" Name="SourcePalsExpander" VerticalContentAlignment="Stretch" adonisExtensions:LayerExtension.IncreaseLayer="True">
+                        <Expander Grid.Row="0" Margin="0,5,0,0" Padding="0" IsExpanded="True" Name="SourcePalsExpander" VerticalContentAlignment="Stretch" adonisExtensions:LayerExtension.IncreaseLayer="True">
+                            <Expander.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <materialIcons:MaterialIcon Kind="AccountGroupOutline" Style="{StaticResource SectionHeaderIconStyle}" />
+                                    <TextBlock Text="{itl:LocalizedText LC_SOURCE_PALS}" />
+                                </StackPanel>
+                            </Expander.Header>
+
                             <i:Interaction.Behaviors>
                                 <b:ExpanderGridRowResetBehavior TargetGridRowIndex="0" ExpandedMinHeight="120" />
                             </i:Interaction.Behaviors>
@@ -251,8 +258,32 @@
                                     <Separator Grid.Row="1" Visibility="Hidden" Margin="0,10,0,10" />
 
                                     <StackPanel Grid.Row="2" vu:StackPanelExtensions.Spacing="5">
-                                        <Label Style="{StaticResource SectionHeaderLabelStyle}" Content="{itl:LocalizedText Code=LC_SOURCE_PALS_PLAYERS_AND_GUILDS}" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Label Grid.Column="0"
+                                                   Style="{StaticResource SectionHeaderLabelStyle}"
+                                                   Content="{itl:LocalizedText Code=LC_SOURCE_PALS_PLAYERS_AND_GUILDS}" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Button Style="{StaticResource IconButtonStyle}"
+                                                        Command="{Binding PalTarget.PalSource.SelectAllCommand}"
+                                                        ToolTip="{itl:LocalizedText Code=LC_SOURCE_PALS_SELECT_ALL}">
+                                                    <materialIcons:MaterialIcon Kind="CheckboxMultipleMarkedOutline" Width="16" Height="16" />
+                                                </Button>
+                                                <Button Style="{StaticResource IconButtonStyle}"
+                                                        Command="{Binding PalTarget.PalSource.SelectNoneCommand}"
+                                                        ToolTip="{itl:LocalizedText Code=LC_SOURCE_PALS_SELECT_NONE}">
+                                                    <materialIcons:MaterialIcon Kind="CheckboxMultipleBlankOutline" Width="16" Height="16" />
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Style="{StaticResource CaptionTextStyle}"
+                                                   Foreground="{DynamicResource {x:Static adonisUi:Brushes.DisabledForegroundBrush}}"
+                                                   Text="{Binding PalTarget.PalSource.SelectionSummary.Value}" />
                                         <v:PalSourceTreeView DataContext="{Binding PalTarget.PalSource}">
+
                                             <v:PalSourceTreeView.Resources>
                                                 <Style TargetType="TreeView" BasedOn="{StaticResource {x:Type TreeView}}">
                                                     <Setter Property="Template">

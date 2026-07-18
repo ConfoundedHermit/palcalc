@@ -869,6 +869,20 @@
   <data name="LC_SOURCE_PALS_PLAYERS_AND_GUILDS" xml:space="preserve">
     <value />
   </data>
+  <data name="LC_SOURCE_PALS_SELECT_ALL" xml:space="preserve">
+    <value />
+  </data>
+  <data name="LC_SOURCE_PALS_SELECT_NONE" xml:space="preserve">
+    <value />
+  </data>
+  <data name="LC_SOURCE_PALS_SELECTION_SUMMARY" xml:space="preserve">
+    <value>Selected | Total</value>
+  </data>
+  <data name="LC_SOURCE_PALS_NODE_COUNT" xml:space="preserve">
+    <value>Count</value>
+  </data>
+
+
   <data name="LC_INCLUDE_PALS_ON_EXPEDITIONS" xml:space="preserve">
     <value />
   </data>

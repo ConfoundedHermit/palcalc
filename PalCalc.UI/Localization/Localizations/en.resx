@@ -824,6 +824,20 @@ Higher values linearly affect time required, depending on how many types of pals
   <data name="LC_SOURCE_PALS_PLAYERS_AND_GUILDS" xml:space="preserve">
     <value>Guild and Players</value>
   </data>
+  <data name="LC_SOURCE_PALS_SELECT_ALL" xml:space="preserve">
+    <value>Select All</value>
+  </data>
+  <data name="LC_SOURCE_PALS_SELECT_NONE" xml:space="preserve">
+    <value>Select None</value>
+  </data>
+  <data name="LC_SOURCE_PALS_SELECTION_SUMMARY" xml:space="preserve">
+    <value>{Selected} of {Total} players</value>
+  </data>
+  <data name="LC_SOURCE_PALS_NODE_COUNT" xml:space="preserve">
+    <value>({Count})</value>
+  </data>
+
+
   <data name="LC_STARTUP_LOADING" xml:space="preserve">
     <value>Loading...</value>
   </data>
