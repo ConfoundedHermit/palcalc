@@ -46,6 +46,7 @@ namespace PalCalc.UI.ViewModel
         private static ILogger logger = Log.ForContext<MainWindowViewModel>();
         private static PalDB db = PalDB.LoadEmbedded();
         private Dictionary<ISaveGame, PalTargetListViewModel> targetsBySaveFile;
+        private readonly List<ISaveGame> failedToLoadSaves = new List<ISaveGame>();
         private Dispatcher dispatcher;
         private AppSettings settings;
         private PassiveSkillsPresetCollectionViewModel passivePresets;
@@ -70,6 +71,11 @@ namespace PalCalc.UI.ViewModel
 
 
         public MainWindowViewModel() : this(null, null) { }
+
+        private void RecordFailedSaveLoad(ISaveGame save)
+        {
+            lock (failedToLoadSaves) failedToLoadSaves.Add(save);
+        }
 
         // main app model
         public MainWindowViewModel(Dispatcher dispatcher, Action<MainWindowViewModelLoadingProgress> progressHandler)
@@ -195,6 +201,9 @@ namespace PalCalc.UI.ViewModel
                     {
                         if (Storage.DEBUG_DisableStorage) return new PalTargetListViewModel();
 
+                      try
+                      {
+
 
 
                         var gameSettings = GameSettingsViewModel.Load(sg).ModelObject;
@@ -232,6 +241,7 @@ namespace PalCalc.UI.ViewModel
                                 handleErr: (ex) =>
                                 {
                                     logger.Warning(ex, "an error occurred loading the old targets list for {saveId}, skipping", CachedSaveGame.IdentifierFor(sg));
+                                    RecordFailedSaveLoad(sg);
                                     return new PalTargetListViewModel();
                                 }
                             );
@@ -251,6 +261,7 @@ namespace PalCalc.UI.ViewModel
                                             handleErr: (ex) =>
                                             {
                                                 logger.Warning(ex, "an error occurred loading target for {saveId} at {path}, skipping", CachedSaveGame.IdentifierFor(sg), f);
+                                                RecordFailedSaveLoad(sg);
                                                 return null;
                                             }
                                         );
@@ -262,6 +273,7 @@ namespace PalCalc.UI.ViewModel
                                 handleErr: (ex) =>
                                 {
                                     logger.Warning(ex, "an error occurred loading targets list for {saveId}, skipping", CachedSaveGame.IdentifierFor(sg));
+                                    RecordFailedSaveLoad(sg);
                                     return new PalTargetListViewModel();
                                 }
                             );
@@ -274,6 +286,18 @@ namespace PalCalc.UI.ViewModel
                         progress.LoadedSaves++;
                         progressHandler?.Invoke(progress);
                         return result;
+                      }
+                      catch (Exception ex)
+                      {
+                        // (a single save failing to load must never take down app startup - log it, mark the
+                        //  save as failed so the user can be offered a recovery/reset, and continue with an empty list)
+                        logger.Error(ex, "failed to load target data for {saveId}, skipping save", CachedSaveGame.IdentifierFor(sg));
+                        RecordFailedSaveLoad(sg);
+
+                        progress.LoadedSaves++;
+                        progressHandler?.Invoke(progress);
+                        return new PalTargetListViewModel();
+                      }
                     }
                 );
 
@@ -304,7 +328,67 @@ namespace PalCalc.UI.ViewModel
 
             SolverQueue.SelectItemCommand = new RelayCommand<PalSpecifierViewModel>(vm => PalTargetList.SelectedTarget = PalTargetList.Targets.FirstOrDefault(t => t.LatestJob == vm.LatestJob));
 
+            PromptRecoverFailedSaves();
+
             CheckForUpdates();
+        }
+
+        // If any saves failed to load during startup, offer to reset their cache and target data so the app can
+        // recover instead of repeatedly failing. User settings and custom Pals are deliberately preserved.
+        private void PromptRecoverFailedSaves()
+        {
+            List<ISaveGame> failed;
+            lock (failedToLoadSaves)
+            {
+                if (failedToLoadSaves.Count == 0) return;
+                failed = failedToLoadSaves.Distinct().ToList();
+            }
+
+            dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    var names = string.Join("\n", failed.Select(sg => " - " + CachedSaveGame.IdentifierFor(sg)));
+                    var title = "Some saves could not be loaded";
+                    var msg =
+                        "Pal Calc could not load stored data for the following save(s):\n\n" + names + "\n\n" +
+                        "This is usually caused by a save file that failed to refresh, or by outdated/corrupt cached or target data.\n\n" +
+                        "Would you like to reset Pal Calc's cached and target data for these save(s)? " +
+                        "Your Palworld saves, Pal Calc settings, and custom Pals will NOT be modified. You will need to re-enter any breeding targets for the affected saves.";
+
+                    var owner = App.Current.MainWindow;
+                    var result = owner != null
+                        ? AdonisMessageBox.Show(owner, msg, title, AdonisMessageBoxButton.YesNo)
+                        : AdonisMessageBox.Show(msg, title, AdonisMessageBoxButton.YesNo);
+
+                    if (result != AdonisMessageBoxResult.Yes) return;
+
+                    foreach (var sg in failed)
+                    {
+                        try
+                        {
+                            Storage.ClearCacheAndTargetsForSave(sg);
+                            logger.Information("cleared cached/target data for {saveId} at user request", CachedSaveGame.IdentifierFor(sg));
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Warning(ex, "failed to clear data for {saveId} during recovery", CachedSaveGame.IdentifierFor(sg));
+                        }
+                    }
+
+                    lock (failedToLoadSaves) failedToLoadSaves.Clear();
+
+                    AdonisMessageBox.Show(
+                        owner ?? App.Current.MainWindow,
+                        "The affected save data has been reset. Please restart Pal Calc.",
+                        "Reset complete"
+                    );
+                }
+                catch (Exception ex)
+                {
+                    logger.Warning(ex, "failed to prompt for failed-save recovery");
+                }
+            });
         }
 
         private void Storage_SaveReloaded(ISaveGame save)

@@ -18,6 +18,20 @@ namespace PalCalc.UI.ViewModel.Solver
         private static ILogger logger = Log.ForContext<IPalSourceTreeSelection>();
         public static IPalSourceTreeSelection SingleFromId(CachedSaveGame source, string serializedId)
         {
+            if (source == null)
+            {
+                // (can happen when the save's cached data is missing/invalid, e.g. after a failed save refresh -
+                //  resolving a specific player/guild selection is impossible, so degrade gracefully to no selection)
+                logger.Warning("Cannot resolve pal source selection '{RawID}' because no cached save data is available", serializedId);
+                return null;
+            }
+
+            if (serializedId == null)
+            {
+                logger.Warning("Received a null pal source tree serialized-id");
+                return null;
+            }
+
             if (serializedId.Split("=") is [var type, var value])
             {
                 switch (type)

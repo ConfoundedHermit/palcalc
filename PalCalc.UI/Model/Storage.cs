@@ -157,6 +157,39 @@ namespace PalCalc.UI.Model
             }
         }
 
+        /// <summary>
+        /// Removes only regenerable cache data and stored breeding targets for a save. Unlike
+        /// <see cref="ClearForSave"/>, this deliberately preserves user settings and custom Pals.
+        /// </summary>
+        public static void ClearCacheAndTargetsForSave(ISaveGame save)
+        {
+            try
+            {
+                var cachePath = SaveCachePathFor(save);
+                if (File.Exists(cachePath)) File.Delete(cachePath);
+            }
+            catch (Exception ex)
+            {
+                logger.Warning(ex, "Unable to delete cache-file for {saveId}", save.GameId);
+            }
+
+            try
+            {
+                var dataPath = SaveFileDataPath(save);
+                var targetListPath = Path.Join(dataPath, "pal-target-ids.json");
+                var legacyTargetListPath = Path.Join(dataPath, "pal-targets.json");
+                var targetsPath = SaveFileTargetsDataPath(save);
+
+                if (File.Exists(targetListPath)) File.Delete(targetListPath);
+                if (File.Exists(legacyTargetListPath)) File.Delete(legacyTargetListPath);
+                if (Directory.Exists(targetsPath)) Directory.Delete(targetsPath, true);
+            }
+            catch (Exception ex)
+            {
+                logger.Warning(ex, "Unable to delete target data for {saveId}", save.GameId);
+            }
+        }
+
         public static SaveCustomizations LoadSaveCustomizations(ISaveGame forSaveGame, PalDB db)
         {
             if (DEBUG_DisableStorage) return new SaveCustomizations();

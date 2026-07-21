@@ -669,7 +669,13 @@ namespace PalCalc.UI
 
             List<IPalSourceTreeSelection> palSourceSelections;
 
-            if (obj["PalSourceId"] != null)
+            if (source == null)
+            {
+                // (the cached save data is unavailable - e.g. missing/invalid after a failed save refresh - so
+                //  player/guild-specific selections can't be resolved. Fall back to "all pals" so this target still loads)
+                palSourceSelections = null;
+            }
+            else if (obj["PalSourceId"] != null)
             {
                 var selectionId = obj["PalSourceId"].ToObject<string>();
                 if (selectionId != null) palSourceSelections = [IPalSourceTreeSelection.SingleFromId(source, selectionId)];
