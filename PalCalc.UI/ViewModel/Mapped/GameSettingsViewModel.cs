@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using PalCalc.Model;
 using PalCalc.SaveReader;
 using PalCalc.UI.Model;
+using PalCalc.UI.Model.Persistence;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -130,7 +131,7 @@ namespace PalCalc.UI.ViewModel.Mapped
         {
             if (Storage.DEBUG_DisableStorage) return;
 
-            File.WriteAllText(Storage.GameSettingsPath(forSave), ToJson());
+            TransactionalDocumentWriter.Write(Storage.GameSettingsPath(forSave), this, settings => settings.ToJson());
         }
 
         public static GameSettingsViewModel Load(ISaveGame forSave)
@@ -138,21 +139,54 @@ namespace PalCalc.UI.ViewModel.Mapped
             if (Storage.DEBUG_DisableStorage) return new GameSettingsViewModel();
 
             var path = Storage.GameSettingsPath(forSave);
-            if (File.Exists(path))
+            var loaded = RecoverableDocumentReader.Read(path, FromJson);
+            if (!loaded.IsSuccess)
+            {
+                if (loaded.PrimaryFailure is not null || loaded.BackupFailure is not null)
+                {
+                    logger.Error(
+                        "Unable to read game settings from the primary or backup document at {path}; using in-memory defaults. Primary failure: {hasPrimaryFailure}; backup failure: {hasBackupFailure}",
+                        path,
+                        loaded.PrimaryFailure is not null,
+                        loaded.BackupFailure is not null);
+                }
+
+                return new GameSettingsViewModel();
+            }
+
+            if (loaded.Source == PersistedDocumentSource.Backup)
+            {
+                RestorePrimaryFromBackup(path, loaded.Value, loaded.PrimaryFailure);
+            }
+
+            return loaded.Value;
+        }
+
+        private static void RestorePrimaryFromBackup(string path, GameSettingsViewModel settings, Exception primaryFailure)
+        {
+            if (primaryFailure is not null)
             {
                 try
                 {
-                    return FromJson(File.ReadAllText(path));
+                    var diagnosticPath = RecoverableDocumentReader.PreserveFailedPrimary(path);
+                    if (diagnosticPath is not null)
+                        logger.Warning("Recovered game settings from backup; preserved failed primary at {diagnosticPath}", diagnosticPath);
                 }
                 catch (Exception ex)
                 {
-                    logger.Error(ex, "error when loading game settings from {path}", path);
-                    return new GameSettingsViewModel();
+                    logger.Error(ex, "Recovered game settings from backup but could not preserve the failed primary; leaving it untouched");
+                    return;
                 }
             }
-            else
+
+            try
             {
-                return new GameSettingsViewModel();
+                TransactionalDocumentWriter.Write(path, settings, item => item.ToJson());
+                logger.Warning("Recovered game settings from backup and restored the primary document at {path}", path);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Recovered game settings from backup but could not restore the primary document at {path}", path);
             }
         }
     }

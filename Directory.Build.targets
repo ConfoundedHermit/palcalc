@@ -4,4 +4,10 @@
           Condition="'$(MSBuildProjectName)' == 'PalCalc.UI'">
     <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)build\ValidateResx.ps1&quot; -RepositoryRoot &quot;$(MSBuildThisFileDirectory)PalCalc.UI\..&quot;" />
   </Target>
+
+  <Target Name="GenerateLocalizationCodes"
+          BeforeTargets="CoreCompile"
+          Condition="'$(MSBuildProjectName)' == 'PalCalc.UI'">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)build\GenerateLocalizationCodes.ps1&quot;" />
+  </Target>
 </Project>

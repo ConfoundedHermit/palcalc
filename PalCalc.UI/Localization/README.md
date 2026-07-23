@@ -71,9 +71,15 @@ If you want credit, include your name for Pal Calc's "About" window.
 
 ## For Developers
 
-The code generation for `LocalizationCodes.resx` is custom (creates an `enum` instead of a class with static getter methods) and uses the [ResXResourceManager](https://marketplace.visualstudio.com/items?itemName=TomEnglert.ResXManager) extension. **If you're not planning to add new text, you don't need this extension.** The `LocalizationCodes.Designer.cs` file stored in this repo should be up to date with the latest content.
+The code generation for `LocalizationCodes.resx` is custom (creates an `enum` instead of a class with static getter methods). The repository-local generator is [GenerateLocalizationCodes.ps1](../../build/GenerateLocalizationCodes.ps1); it runs automatically when `PalCalc.UI` builds and can be run directly from VS Code with:
 
-If you do make changes to `LocalizationCodes.resx`, they are applied when the project is built, or you can manually expand the `LocalizationCodes.resx` file in the solution explorer, right-click the `LocalizationCodes.Designer.tt` sub-entry, and choose "Run Custom Tool". (This can take a few moments on the first run for some reason.)
+```powershell
+pwsh -NoProfile -File build/GenerateLocalizationCodes.ps1
+```
+
+The [ResXResourceManager](https://marketplace.visualstudio.com/items?itemName=TomEnglert.ResXManager) extension remains compatible with the `.tt` template, but is not required. **If you're not planning to add new text, you do not need to run either generator.** `LocalizationCodes.Designer.cs` is generated and must not be edited manually.
+
+If you make changes to `LocalizationCodes.resx`, build `PalCalc.UI` or run the repository-local generator directly. The generated enum must be refreshed before code can reference a new localization code.
 
 You can set `DEBUG_DISABLE_TRANSLATIONS = true` in `Translator.cs` to force all localized text to display as a representation of the localization method for that text; i.e., properly localized text will have an obvious debug-like value, and any text that hasn't been localized will appear normal.
 

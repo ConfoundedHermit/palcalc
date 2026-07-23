@@ -45,6 +45,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PalCalc.Model.Tests", "PalC
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PalCalc.SaveReader.Tests", "PalCalc.SaveReader.Tests\PalCalc.SaveReader.Tests.csproj", "{D490A0B7-C6BB-4B52-AB27-7A5C734BFC9A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PalCalc.UI.Tests", "PalCalc.UI.Tests\PalCalc.UI.Tests.csproj", "{7B6F86C2-E71C-4C2B-93D0-EA6B43C935B2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -142,6 +144,12 @@ Global
 		{D490A0B7-C6BB-4B52-AB27-7A5C734BFC9A}.Release_NoBundle|x64.Build.0 = Release|x64
 		{D490A0B7-C6BB-4B52-AB27-7A5C734BFC9A}.Release|x64.ActiveCfg = Release|x64
 		{D490A0B7-C6BB-4B52-AB27-7A5C734BFC9A}.Release|x64.Build.0 = Release|x64
+		{7B6F86C2-E71C-4C2B-93D0-EA6B43C935B2}.Debug|x64.ActiveCfg = Debug|x64
+		{7B6F86C2-E71C-4C2B-93D0-EA6B43C935B2}.Debug|x64.Build.0 = Debug|x64
+		{7B6F86C2-E71C-4C2B-93D0-EA6B43C935B2}.Release_NoBundle|x64.ActiveCfg = Release|x64
+		{7B6F86C2-E71C-4C2B-93D0-EA6B43C935B2}.Release_NoBundle|x64.Build.0 = Release|x64
+		{7B6F86C2-E71C-4C2B-93D0-EA6B43C935B2}.Release|x64.ActiveCfg = Release|x64
+		{7B6F86C2-E71C-4C2B-93D0-EA6B43C935B2}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

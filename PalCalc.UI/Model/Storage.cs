@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using PalCalc.Model;
 using PalCalc.SaveReader;
+using PalCalc.UI.Model.Persistence;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -21,9 +22,12 @@ namespace PalCalc.UI.Model
         // (debug-only setting)
         public static readonly bool DEBUG_DisableStorage = false;
 
-        public static string CachePath => "cache";
+        private static string storageRootPath = null;
+        private static bool appSettingsRecoveryPromptPending = false;
+
+        public static string CachePath => PathUnderStorageRoot("cache");
         public static string SaveCachePath => $"{CachePath}/saves";
-        public static string DataPath => "data";
+        public static string DataPath => PathUnderStorageRoot("data");
 
         public static string AppSettingsPath
         {
@@ -66,6 +70,19 @@ namespace PalCalc.UI.Model
         }
 
         private static bool didInit = false;
+
+        internal static IDisposable UseStorageRootForTests(string rootPath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
+            var previousRootPath = storageRootPath;
+            var previousDidInit = didInit;
+            var previousRecoveryPromptPending = appSettingsRecoveryPromptPending;
+            storageRootPath = rootPath;
+            didInit = false;
+            appSettingsRecoveryPromptPending = false;
+            return new StorageRootTestScope(previousRootPath, previousDidInit, previousRecoveryPromptPending);
+        }
+
         public static void Init()
         {
             if (didInit) return;
@@ -100,45 +117,183 @@ namespace PalCalc.UI.Model
         {
             if (DEBUG_DisableStorage) return new();
 
-            if (File.Exists(AppSettingsPath))
+            var settingsPath = AppSettingsPath;
+            var loaded = RecoverableDocumentReader.Read(settingsPath, DeserializeAppSettings);
+            if (!loaded.IsSuccess)
+            {
+                if (loaded.PrimaryFailure is not null || loaded.BackupFailure is not null)
+                {
+                    appSettingsRecoveryPromptPending = true;
+                    logger.Error(
+                        "Unable to read app settings from the primary or backup document; using in-memory defaults. Primary failure: {hasPrimaryFailure}; backup failure: {hasBackupFailure}",
+                        loaded.PrimaryFailure is not null,
+                        loaded.BackupFailure is not null);
+                }
+
+                return new();
+            }
+
+            var res = loaded.Value;
+            if (loaded.Source == PersistedDocumentSource.Backup)
+            {
+                RestoreAppSettingsPrimaryFromBackup(settingsPath, res, loaded.PrimaryFailure);
+            }
+
+            // remove duplicates caused by missing `ObjectCreationHandling` in older versions
+            res.SolverSettings.BannedBredPalInternalNames = res.SolverSettings.BannedBredPalInternalNames.Distinct().ToList();
+            res.SolverSettings.BannedWildPalInternalNames = res.SolverSettings.BannedWildPalInternalNames.Distinct().ToList();
+
+            return res;
+        }
+
+        public static void SaveAppSettings(AppSettings settings) =>
+            TransactionalDocumentWriter.Write(AppSettingsPath, settings, SerializeAppSettings);
+
+        /// <summary>
+        /// Reads a user-configured document and repairs its primary from a valid backup without
+        /// discarding an unreadable primary. Callers decide how to handle a failure of both copies.
+        /// </summary>
+        internal static RecoverableDocumentReadResult<T> LoadUserDocument<T>(
+            string path,
+            Func<string, T> deserialize,
+            Func<T, string> serialize,
+            string documentDescription)
+            where T : class
+        {
+            var loaded = RecoverableDocumentReader.Read(path, deserialize);
+            if (!loaded.IsSuccess || loaded.Source != PersistedDocumentSource.Backup) return loaded;
+
+            if (loaded.PrimaryFailure is not null)
             {
                 try
                 {
-                    var res = JsonConvert.DeserializeObject<AppSettings>(
-                        File.ReadAllText(AppSettingsPath),
-                        // `res.SolverSettings.BannedWildPalInternalNames` has a non-empty-list default value, base Newtonsoft JSON
-                        // behavior is to *MERGE* the deserialized list with the default value, leading to a bunch of duplicates.
-                        new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace }
-                    ) ?? new();
-
-                    // remove duplicates caused by missing `ObjectCreationHandling` in older versions
-                    res.SolverSettings.BannedBredPalInternalNames = res.SolverSettings.BannedBredPalInternalNames.Distinct().ToList();
-                    res.SolverSettings.BannedWildPalInternalNames = res.SolverSettings.BannedWildPalInternalNames.Distinct().ToList();
-
-                    return res;
+                    var diagnosticPath = RecoverableDocumentReader.PreserveFailedPrimary(path);
+                    if (diagnosticPath is not null)
+                        logger.Warning("Recovered {documentDescription} from backup; preserved failed primary at {diagnosticPath}", documentDescription, diagnosticPath);
                 }
-                catch (Exception e)
+                catch (Exception ex)
                 {
-                    logger.Error(e, "error reading app settings files, resetting");
-
-                    File.Delete(AppSettingsPath);
-                    return LoadAppSettings();
+                    logger.Error(ex, "Recovered {documentDescription} from backup but could not preserve the failed primary; leaving it untouched", documentDescription);
+                    return loaded;
                 }
             }
-            else
+
+            try
             {
-                return new();
+                TransactionalDocumentWriter.Write(path, loaded.Value, serialize);
+                logger.Warning("Recovered {documentDescription} from backup and restored the primary document", documentDescription);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Recovered {documentDescription} from backup but could not restore the primary document", documentDescription);
+            }
+
+            return loaded;
+        }
+
+        internal static void SaveUserDocument<T>(string path, T document, Func<T, string> serialize) =>
+            TransactionalDocumentWriter.Write(path, document, serialize);
+
+        /// <summary>
+        /// Retains a successfully migrated legacy document under a distinct name. It is never
+        /// deleted as part of migration, so a user can recover it if the new document set fails.
+        /// </summary>
+        internal static void ArchiveMigratedUserDocument(string path)
+        {
+            if (!File.Exists(path)) return;
+
+            var fullPath = Path.GetFullPath(path);
+            var directory = Path.GetDirectoryName(fullPath)
+                ?? throw new InvalidOperationException($"Could not determine a directory for '{path}'.");
+            var archivePath = Path.Combine(
+                directory,
+                $"{Path.GetFileName(fullPath)}.migrated-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}");
+            SystemPersistenceFileOperations.Instance.MoveFile(fullPath, archivePath, overwrite: false);
+        }
+
+        internal static bool ConsumeAppSettingsRecoveryPrompt()
+        {
+            var result = appSettingsRecoveryPromptPending;
+            appSettingsRecoveryPromptPending = false;
+            return result;
+        }
+
+        /// <summary>
+        /// Preserves both unreadable app-settings documents under diagnostic names, then writes
+        /// a new default settings document. It is only called after explicit user confirmation.
+        /// </summary>
+        internal static void ResetAppSettingsAfterRecovery()
+        {
+            var settingsPath = AppSettingsPath;
+            PreserveAppSettingsDocument(settingsPath);
+            PreserveAppSettingsDocument(settingsPath + RecoverableDocumentReader.BackupExtension);
+            SaveAppSettings(new AppSettings());
+        }
+
+        private static AppSettings DeserializeAppSettings(string json) =>
+            JsonConvert.DeserializeObject<AppSettings>(
+                json,
+                // `SolverSettings.BannedWildPalInternalNames` has a non-empty-list default value; base Newtonsoft JSON
+                // behavior is to merge the deserialized list with it, leading to duplicate entries.
+                new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace }
+            ) ?? new();
+
+        private static string SerializeAppSettings(AppSettings settings) => JsonConvert.SerializeObject(settings);
+
+        private static void RestoreAppSettingsPrimaryFromBackup(string settingsPath, AppSettings settings, Exception primaryFailure)
+        {
+            if (primaryFailure is not null)
+            {
+                try
+                {
+                    var diagnosticPath = RecoverableDocumentReader.PreserveFailedPrimary(settingsPath);
+                    if (diagnosticPath is not null)
+                        logger.Warning("Recovered app settings from backup; preserved failed primary at {diagnosticPath}", diagnosticPath);
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, "Recovered app settings from backup but could not preserve the failed primary; leaving it untouched");
+                    return;
+                }
+            }
+
+            try
+            {
+                TransactionalDocumentWriter.Write(settingsPath, settings, SerializeAppSettings);
+                logger.Warning("Recovered app settings from backup and restored the primary document");
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Recovered app settings from backup but could not restore the primary document");
             }
         }
 
-        public static void SaveAppSettings(AppSettings settings) => File.WriteAllText(AppSettingsPath, JsonConvert.SerializeObject(settings));
+        private static void PreserveAppSettingsDocument(string path)
+        {
+            if (!File.Exists(path)) return;
+
+            var diagnosticPath = RecoverableDocumentReader.PreserveFailedPrimary(path);
+            logger.Warning("Preserved unreadable app settings document at {diagnosticPath}", diagnosticPath);
+        }
+
+        private static string PathUnderStorageRoot(string relativePath) =>
+            storageRootPath is null ? relativePath : Path.Combine(storageRootPath, relativePath);
+
+        private sealed class StorageRootTestScope(string previousRootPath, bool previousDidInit, bool previousRecoveryPromptPending) : IDisposable
+        {
+            public void Dispose()
+            {
+                storageRootPath = previousRootPath;
+                didInit = previousDidInit;
+                appSettingsRecoveryPromptPending = previousRecoveryPromptPending;
+            }
+        }
 
         public static void ClearForSave(ISaveGame save)
         {
             try
             {
-                var cachePath = SaveCachePathFor(save);
-                if (File.Exists(cachePath)) File.Delete(cachePath);
+                DiscardCacheDocuments(SaveCachePathFor(save));
             }
             catch (Exception ex)
             {
@@ -165,8 +320,7 @@ namespace PalCalc.UI.Model
         {
             try
             {
-                var cachePath = SaveCachePathFor(save);
-                if (File.Exists(cachePath)) File.Delete(cachePath);
+                DiscardCacheDocuments(SaveCachePathFor(save));
             }
             catch (Exception ex)
             {
@@ -195,26 +349,16 @@ namespace PalCalc.UI.Model
             if (DEBUG_DisableStorage) return new SaveCustomizations();
 
             var filePath = CustomContainerPath(forSaveGame);
-            if (!File.Exists(filePath)) return new SaveCustomizations();
+            var converter = new PalInstanceJsonConverter(db);
+            var loaded = LoadUserDocument(
+                filePath,
+                json => JsonConvert.DeserializeObject<SaveCustomizations>(json, converter),
+                value => JsonConvert.SerializeObject(value, converter),
+                "save customizations");
+            if (!loaded.IsSuccess)
+                logger.Warning(loaded.PrimaryFailure, "Unable to load save customizations for {label}; preserving unreadable documents", CachedSaveGame.IdentifierFor(forSaveGame));
 
-            SaveCustomizations res = PCDebug.HandleErrors(
-                action: () => JsonConvert.DeserializeObject<SaveCustomizations>(File.ReadAllText(filePath), new PalInstanceJsonConverter(db)),
-                handleErr: (re) =>
-                {
-                    logger.Warning(re, "failed to load save customizations for {label}, clearing", CachedSaveGame.IdentifierFor(forSaveGame));
-                    try
-                    {
-                        File.Delete(filePath);
-                    }
-                    catch (Exception fe)
-                    {
-                        logger.Warning(fe, "failed to delete customizations file");
-                    }
-                    return null;
-                }
-            );
-
-            res ??= new SaveCustomizations();
+            var res = loaded.Value ?? new SaveCustomizations();
             res.CustomContainers ??= [];
             return res;
         }
@@ -223,9 +367,11 @@ namespace PalCalc.UI.Model
         {
             if (DEBUG_DisableStorage) return;
 
-            File.WriteAllText(
+            var converter = new PalInstanceJsonConverter(db);
+            SaveUserDocument(
                 CustomContainerPath(forSaveGame),
-                JsonConvert.SerializeObject(custom, new PalInstanceJsonConverter(db))
+                custom,
+                value => JsonConvert.SerializeObject(value, converter)
             );
         }
 
@@ -243,23 +389,32 @@ namespace PalCalc.UI.Model
             if (DEBUG_DisableStorage) return null;
 
             var path = SaveCachePathFor(save);
-            if (File.Exists(path))
+            if (File.Exists(path) || File.Exists(path + RecoverableDocumentReader.BackupExtension))
             {
-                CachedSaveGame res = PCDebug.HandleErrors(
-                    action: () =>
-                    {
-                        var csg = CachedSaveGame.FromJson(File.ReadAllText(path), db);
-                        csg.UnderlyingSave = save;
-                        return csg;
-                    },
-                    handleErr: (ex) =>
-                    {
-                        logger.Error(ex, "failed to load cached save-game data, clearing");
+                var loaded = RecoverableDocumentReader.Read(path, json => CachedSaveGame.FromJson(json, db));
+                if (!loaded.IsSuccess)
+                {
+                    logger.Error(loaded.PrimaryFailure, "Failed to load cached save-game data; discarding the regenerable cache");
+                    DiscardCacheDocuments(path);
+                    return null;
+                }
 
-                        File.Delete(path);
-                        return null;
+                var res = loaded.Value;
+                if (loaded.Source == PersistedDocumentSource.Backup)
+                {
+                    logger.Warning("Recovered cached save-game data from its backup; discarding the unreadable cache primary");
+                    try
+                    {
+                        if (File.Exists(path)) File.Delete(path);
+                        TransactionalDocumentWriter.Write(path, res, cached => cached.ToJson(db));
                     }
-                );
+                    catch (Exception ex)
+                    {
+                        logger.Warning(ex, "Recovered cached save-game data from backup but could not restore the primary cache document");
+                    }
+                }
+
+                res.UnderlyingSave = save;
 
                 CrashSupport.ReferencedCachedSave(res);
                 return res;
@@ -280,10 +435,10 @@ namespace PalCalc.UI.Model
             var path = SaveCachePathFor(save);
             if (!save.IsValid)
             {
-                if (!DEBUG_DisableStorage && File.Exists(path))
+                if (!DEBUG_DisableStorage && (File.Exists(path) || File.Exists(path + RecoverableDocumentReader.BackupExtension)))
                 {
                     logger.Warning("cached save available but the save-game itself is invalid, deleting cached save for {savePath}", save.BasePath);
-                    File.Delete(path);
+                    DiscardCacheDocuments(path);
                 }
                 return null;
             }
@@ -294,21 +449,21 @@ namespace PalCalc.UI.Model
             {
                 if (InMemorySaves.ContainsKey(identifier)) return InMemorySaves[identifier];
 
-                if (!DEBUG_DisableStorage && File.Exists(path))
+                if (!DEBUG_DisableStorage && (File.Exists(path) || File.Exists(path + RecoverableDocumentReader.BackupExtension)))
                 {
                     var res = LoadSaveFromCache(save, db);
 
-                    if (!res.IsValid)
+                    if (res is null || !res.IsValid)
                     {
                         // TODO - no longer necessary? should have been covered by check at top of this method
                         // TODO - log
-                        File.Delete(path);
+                        DiscardCacheDocuments(path);
                         return null;
                     }
 
                     if (res.IsOutdated(db))
                     {
-                        File.Delete(path);
+                        DiscardCacheDocuments(path);
                         return LoadSave(containerLocation, save, db, settings);
                     }
 
@@ -323,7 +478,7 @@ namespace PalCalc.UI.Model
                         CrashSupport.ReferencedCachedSave(res);
 
                         if (!DEBUG_DisableStorage)
-                            File.WriteAllText(path, res.ToJson(db));
+                            TransactionalDocumentWriter.Write(path, res, cached => cached.ToJson(db));
                     }
 
                     // TODO - adding `null` entries will prevent re-adding a save at the same path until the app is restarted
@@ -382,7 +537,7 @@ namespace PalCalc.UI.Model
                 {
                     if (!DEBUG_DisableStorage && wasStored)
                     {
-                        if (File.Exists(path)) File.Delete(path);
+                        DiscardCacheDocuments(path);
 
                         File.Move(backupPath, path);
                     }
@@ -407,5 +562,13 @@ namespace PalCalc.UI.Model
         }
 
         #endregion
+
+        private static void DiscardCacheDocuments(string cachePath)
+        {
+            foreach (var path in new[] { cachePath, cachePath + RecoverableDocumentReader.BackupExtension })
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+        }
     }
 }
