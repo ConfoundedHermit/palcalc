@@ -9,11 +9,11 @@ namespace PalCalc.Model.Tests
     [TestClass]
     public class PalTestBase
     {
-        private static PalDB defaultDb;
-        private static PalBreedingDB defaultBreedingDb;
+        private static PalDB? defaultDb;
+        private static PalBreedingDB? defaultBreedingDb;
 
-        protected PalDB paldb => defaultDb;
-        protected PalBreedingDB breedingdb => defaultBreedingDb;
+        protected PalDB paldb => defaultDb ?? throw new InvalidOperationException("The test database has not been initialized.");
+        protected PalBreedingDB breedingdb => defaultBreedingDb ?? throw new InvalidOperationException("The test breeding database has not been initialized.");
 
         [AssemblyInitialize]
         public static async Task AssemblyInit(TestContext context)

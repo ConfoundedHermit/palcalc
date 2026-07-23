@@ -1,0 +1,7 @@
+<Project>
+  <Target Name="ValidateResxResourceNames"
+          BeforeTargets="PrepareResources"
+          Condition="'$(MSBuildProjectName)' == 'PalCalc.UI'">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)build\ValidateResx.ps1&quot; -RepositoryRoot &quot;$(MSBuildThisFileDirectory)PalCalc.UI\..&quot;" />
+  </Target>
+</Project>

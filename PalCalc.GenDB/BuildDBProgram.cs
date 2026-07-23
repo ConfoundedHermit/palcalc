@@ -710,7 +710,7 @@ namespace PalCalc.GenDB
             OodleHelper.DownloadOodleDll();
             OodleHelper.Initialize();
 
-            var provider = new DefaultFileProvider(PalworldDirPath, SearchOption.AllDirectories, true, new VersionContainer(EGame.GAME_UE5_1));
+            var provider = new DefaultFileProvider(PalworldDirPath, SearchOption.AllDirectories, new VersionContainer(EGame.GAME_UE5_1), StringComparer.OrdinalIgnoreCase);
             provider.MappingsContainer = new FileUsmapTypeMappingsProvider(MappingsPath);
 
             provider.Initialize();

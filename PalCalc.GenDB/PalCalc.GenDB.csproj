@@ -12,6 +12,9 @@
   <ItemGroup>
     <PackageReference Include="CUE4Parse" Version="1.2.2.202607" />
     <PackageReference Include="CUE4Parse-Conversion" Version="1.2.2.202607" />
+    <!-- CUE4Parse currently reaches Microsoft.Bcl.Memory through Fmod5Sharp/IndexRange.
+         Keep the transitive dependency on the patched 9.0 servicing line until upstream updates it. -->
+    <PackageReference Include="Microsoft.Bcl.Memory" Version="9.0.18" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
