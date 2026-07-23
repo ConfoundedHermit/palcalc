@@ -15,11 +15,9 @@
 	<Platforms>x64</Platforms>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <DefineConstants>$(DefineConstants);HANDLE_ERRORS</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_NoBundle|x64'">
+  <!-- Error boundaries are required in every distributable build. `dotnet build -c Release`
+       does not necessarily provide Platform=x64, so do not make this safety switch platform-dependent. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' Or '$(Configuration)' == 'Release_NoBundle'">
     <DefineConstants>$(DefineConstants);HANDLE_ERRORS</DefineConstants>
   </PropertyGroup>
 

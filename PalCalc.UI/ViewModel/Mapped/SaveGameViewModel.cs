@@ -73,7 +73,15 @@ namespace PalCalc.UI.ViewModel.Mapped
             });
 
             Storage.SaveReloaded += RespondToChanges;
-            CachedSaveGame.SaveFileLoadEnd += (save, cached) => RespondToChanges(save);
+            CachedSaveGame.SaveFileLoadEnd += (save, cached) =>
+            {
+                if (save == value) HasLoadFailure = false;
+                RespondToChanges(save);
+            };
+            CachedSaveGame.SaveFileLoadError += (save, _) =>
+            {
+                if (save == value) HasLoadFailure = true;
+            };
         }
 
         private void RespondToChanges(ISaveGame changedSave)
@@ -156,7 +164,11 @@ namespace PalCalc.UI.ViewModel.Mapped
         [NotifyPropertyChangedFor(nameof(HasWarnings))]
         private bool isValid;
 
-        public bool HasWarnings => !IsValid;
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasWarnings))]
+        private bool hasLoadFailure;
+
+        public bool HasWarnings => !IsValid || HasLoadFailure;
 
         private bool hasChanges;
         public bool HasChanges

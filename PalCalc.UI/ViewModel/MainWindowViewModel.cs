@@ -508,10 +508,23 @@ namespace PalCalc.UI.ViewModel
         {
             logger.Error(ex, "error when parsing save file for {saveId}", CachedSaveGame.IdentifierFor(obj));
 
+            // A source-save parsing error cannot be repaired by deleting Pal Calc's cache or targets.
+            // Clear a persisted auto-selection so the same unavailable save cannot trap the user in a
+            // startup failure loop. Keep the save entry itself so the user can retry it after updating
+            // Pal Calc or restoring a compatible Palworld save.
+            var saveId = CachedSaveGame.IdentifierFor(obj);
+            if (settings.SelectedGameIdentifier == saveId)
+            {
+                settings.SelectedGameIdentifier = null;
+                Storage.SaveAppSettings(settings);
+                logger.Information("cleared failed auto-selected save {saveId}", saveId);
+            }
+
             var crashsupport = CrashSupport.PrepareSupportFile(specificSave: obj);
             AdonisMessageBox.Show(LocalizationCodes.LC_ERROR_SAVE_LOAD_FAILED.Bind(crashsupport).Value, caption: "");
 
-            SaveSelection.SelectedGame = null;
+            if (SaveSelection?.SelectedFullGame?.Value == obj)
+                SaveSelection.SelectedGame = null;
         }
 
         private void UpdateFromSaveProperties()

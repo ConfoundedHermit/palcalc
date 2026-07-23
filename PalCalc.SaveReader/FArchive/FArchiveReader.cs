@@ -14,6 +14,7 @@ namespace PalCalc.SaveReader.FArchive
     public class FArchiveReader : IDisposable
     {
         private static ILogger logger = Log.ForContext<FArchiveReader>();
+        private const int MaxStringByteLength = 1024 * 1024;
 
         BinaryReader reader;
         Dictionary<string, string> typeHints;
@@ -774,13 +775,29 @@ namespace PalCalc.SaveReader.FArchive
 
         public string ReadString()
         {
+            var stringOffset = reader.BaseStream.CanSeek ? reader.BaseStream.Position : -1;
             var size = ReadInt32();
             if (size == 0) return "";
 
-            // haven't seen a string larger than 100 chars yet, if we see it there's likely a bug
-            if (Math.Abs(size) > 1000)
+            var byteLength = size < 0 ? -(long)size * 2 : size;
+            var terminatorLength = size < 0 ? 2 : 1;
+
+            // FString data in Palworld saves is normally very small. A huge length means an earlier
+            // property was interpreted with the wrong structure; do not attempt a massive allocation
+            // and turn that useful parse failure into an opaque buffer exception.
+            if (byteLength < terminatorLength || byteLength > MaxStringByteLength)
             {
-                logger.Warning("String size of {size} is abnormal, likely a parsing error which will cause a crash", size);
+                throw new InvalidDataException($"Invalid FString size {size} ({byteLength} bytes) at archive offset {stringOffset}. This usually indicates malformed or unsupported save data.");
+            }
+
+            if (reader.BaseStream.CanSeek && byteLength > reader.BaseStream.Length - reader.BaseStream.Position)
+            {
+                throw new EndOfStreamException($"FString size {size} ({byteLength} bytes) at archive offset {stringOffset} exceeds the remaining archive data.");
+            }
+
+            if (byteLength > 1000)
+            {
+                logger.Warning("String size of {size} is abnormal at archive offset {offset}", size, stringOffset);
 #if DEBUG
                 Debugger.Break();
 #endif
@@ -791,18 +808,17 @@ namespace PalCalc.SaveReader.FArchive
 
             if (size < 0)
             {
-                size = -size * 2;
-                bytes = ReadBytes(size);
+                bytes = ReadBytes((int)byteLength);
                 encoding = Encoding.Unicode; // utf-16-le
 
-                size -= 2;
+                size = (int)byteLength - terminatorLength;
             }
             else
             {
-                bytes = ReadBytes(size);
+                bytes = ReadBytes((int)byteLength);
                 encoding = Encoding.ASCII;
 
-                size -= 1;
+                size = (int)byteLength - terminatorLength;
             }
 
             return encoding.GetString(bytes, 0, size);
