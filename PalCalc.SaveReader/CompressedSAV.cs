@@ -70,41 +70,48 @@ namespace PalCalc.SaveReader
 
         public static CompressedSAVHeader Read(Stream stream)
         {
-            using (var binaryReader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true))
+            try
             {
-                var res = new CompressedSAVHeader();
-
-                // TODO - seems incorrect when `HasGamePassMarker` matches, though this 8-byte offset is needed with/without that match
-                res.UncompressedLength = binaryReader.ReadInt32();
-                res.CompressedLength = binaryReader.ReadInt32();
-
-                var compressionFormat = ParseTypeMarker(binaryReader.ReadBytes(4));
-
-                if (compressionFormat != null && compressionFormat.Value.HasFlag(TypeMarker.TYPE_CNK))
+                using (var binaryReader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true))
                 {
-                    res.HasGamePassMarker = true;
+                    var res = new CompressedSAVHeader();
 
-                    // unknown content
-                    binaryReader.ReadBytes(8);
-                    compressionFormat = ParseTypeMarker(binaryReader.ReadBytes(4));
+                    // TODO - seems incorrect when `HasGamePassMarker` matches, though this 8-byte offset is needed with/without that match
+                    res.UncompressedLength = binaryReader.ReadInt32();
+                    res.CompressedLength = binaryReader.ReadInt32();
 
-                    if (compressionFormat == null)
+                    var compressionFormat = ParseTypeMarker(binaryReader.ReadBytes(4));
+
+                    if (compressionFormat != null && compressionFormat.Value.HasFlag(TypeMarker.TYPE_CNK))
                     {
-                        // XGP saves can be split across multiple files. Partial save files don't have the PlZ type marker,
-                        // and the data starts immediately after CNK0.
-                        //
-                        // reverse back to the start of the intended data block
-                        stream.Seek(-12, SeekOrigin.Current);
+                        res.HasGamePassMarker = true;
+
+                        // unknown content
+                        binaryReader.ReadBytes(8);
+                        compressionFormat = ParseTypeMarker(binaryReader.ReadBytes(4));
+
+                        if (compressionFormat == null)
+                        {
+                            // XGP saves can be split across multiple files. Partial save files don't have the PlZ type marker,
+                            // and the data starts immediately after CNK0.
+                            //
+                            // reverse back to the start of the intended data block
+                            stream.Seek(-12, SeekOrigin.Current);
+                        }
                     }
+
+                    res.HasCompressionMarker = compressionFormat != null;
+
+                    if (compressionFormat == TypeMarker.PLZ2) res.CompressionType = SaveCompressionType.DoubleDeflate;
+                    else if (compressionFormat == TypeMarker.PLM1) res.CompressionType = SaveCompressionType.Oodle;
+                    else res.CompressionType = SaveCompressionType.SingleDeflate;
+
+                    return res;
                 }
-
-                res.HasCompressionMarker = compressionFormat != null;
-
-                if (compressionFormat == TypeMarker.PLZ2) res.CompressionType = SaveCompressionType.DoubleDeflate;
-                else if (compressionFormat == TypeMarker.PLM1) res.CompressionType = SaveCompressionType.Oodle;
-                else res.CompressionType = SaveCompressionType.SingleDeflate;
-
-                return res;
+            }
+            catch (EndOfStreamException e)
+            {
+                throw new InvalidDataException("Compressed save header is truncated.", e);
             }
         }
     }
@@ -145,7 +152,7 @@ namespace PalCalc.SaveReader
 
                         if (firstFileHeader == null)
                         {
-                            if (!header.HasCompressionMarker) throw new Exception("Magic bytes mismatch");
+                            if (!header.HasCompressionMarker) throw new InvalidDataException("Save has no recognized compression marker.");
                             firstFileHeader = header;
                             fs.Seek(0, SeekOrigin.Begin);
                         }
