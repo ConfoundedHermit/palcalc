@@ -19,14 +19,14 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      - name: Restore dependencies (with win-x64 and ReadyToRun)
-        run: dotnet restore --runtime win-x64 /p:PublishReadyToRun=true
+      - name: Restore dependencies and audit high-severity advisories
+        run: dotnet restore --runtime win-x64 /p:PublishReadyToRun=true /p:NuGetAudit=true -warnaserror:NU1903,NU1904
 
       # Note: Configuration, Platform, Runtime Identifier are ignored from PublishProfiles, these must be set explicitly
       #       https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-publish#pubxml-files
 
       - name: Build solution
-        run: dotnet build --configuration Release /p:Platform=x64 --no-restore
+        run: dotnet build --configuration Release /p:Platform=x64 --no-restore -warnaserror:NU1903,NU1904
 
       - name: Publish NonBundled profile (multiple files)
         run: dotnet publish PalCalc.UI/PalCalc.UI.csproj --configuration Release_NoBundle -r win-x64 /p:Platform=x64 /p:PublishProfile=Properties/PublishProfiles/NonBundled.pubxml --output publish/NonBundled
