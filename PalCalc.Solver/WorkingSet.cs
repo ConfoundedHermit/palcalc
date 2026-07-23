@@ -87,6 +87,19 @@ namespace PalCalc.Solver
                 case 1: return false;
             }
 
+            switch (p.IVs.RelevantMaxTotal.CompareTo(match.IVs.RelevantMaxTotal))
+            {
+                // Target IVs take precedence over unrequested IVs.
+                case 1: return true;
+                case -1: return false;
+            }
+
+            switch (p.IVs.RelevantMinTotal.CompareTo(match.IVs.RelevantMinTotal))
+            {
+                case 1: return true;
+                case -1: return false;
+            }
+
             switch (TotalMaxValue(p.IVs).CompareTo(TotalMaxValue(match.IVs)))
             {
                 // pick the one with higher IVs

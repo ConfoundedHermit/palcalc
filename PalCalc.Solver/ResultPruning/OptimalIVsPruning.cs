@@ -12,14 +12,7 @@ namespace PalCalc.Solver.ResultPruning
     /// </param>
     public class OptimalIVsPruning(CancellationToken token, int maxIvDifference) : IResultPruning(token)
     {
-        static int ValueOf(IV_Value value, int fallback, Func<IV_Value, int> map) =>
-            value == IV_Value.Random ? fallback : map(value);
-
-        static int SelectValue(IV_Value value) =>
-            ValueOf(value, 0, r => r.Max);
-
-        static int TotalIVs(IV_Set ivs) =>
-            SelectValue(ivs.HP) + SelectValue(ivs.Attack) + SelectValue(ivs.Defense);
+        static int TotalIVs(IV_Set ivs) => ivs.RelevantMaxTotal;
 
         static int TotalIVs(IPalReference r) => TotalIVs(r.IVs);
 
@@ -32,15 +25,8 @@ namespace PalCalc.Solver.ResultPruning
             //
             //   (would be enforced by grouping with `WorkingSet.DefaultGroupFn`)
             //
-            // - if an IV range is relevant, all its min/max values will also be relevant
-            //
-            //   (would be enforced by applying min-IV filter on input pals (done in
-            //   `BreedingSolver`), so the only IVs included will be relevant IVs)
-            //
-
-            // current impl just compares the maximum part of the IV range. filtering by min/avg
-            // IVs doesn't affect whether we get a relevant result (see above), so we'll instead
-            // try to maximize the highest possible value
+            // Unrequested IVs are retained for display, but must not influence which results
+            // survive pruning. Compare only the highest values for requested IV categories.
 
             if (token.IsCancellationRequested) return results;
 

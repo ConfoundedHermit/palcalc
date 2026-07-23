@@ -92,6 +92,7 @@ namespace PalCalc.Solver
                 .GroupBy(p => allPropertiesGroupFn(p))
                 .Select(g => g
                     .OrderBy(p => p.ActualPassives.Count)
+                    .ThenByDescending(p => p.IVs.RelevantMaxTotal)
                     .ThenBy(p => PreferredLocationPruning.LocationOrderingOf(p.UnderlyingInstance.Location.Type))
                     .ThenByDescending(p => p.UnderlyingInstance.IV_HP + p.UnderlyingInstance.IV_Attack + p.UnderlyingInstance.IV_Defense)
                     .First()
