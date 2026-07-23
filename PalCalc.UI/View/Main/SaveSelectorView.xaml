@@ -96,7 +96,8 @@
             <Run Text="{itl:LocalizedText Code=LC_SAVE_LOCATION_XBOX_INSTALL_3}" />
         </TextBlock>
 
-        <TextBlock Visibility="{Binding SelectedGame.HasWarnings, Converter={StaticResource BVC}, FallbackValue=Collapsed}" Foreground="{DynamicResource {x:Static adonisUi:Brushes.ErrorBrush}}" TextWrapping="Wrap" Text="{itl:LocalizedText LC_SAVE_GAME_INVALID}" />
+        <TextBlock Visibility="{Binding SelectedFullGame.HasInvalidSave, Converter={StaticResource BVC}, FallbackValue=Collapsed}" Foreground="{DynamicResource {x:Static adonisUi:Brushes.ErrorBrush}}" TextWrapping="Wrap" Text="{itl:LocalizedText LC_SAVE_GAME_INVALID}" />
+        <TextBlock Visibility="{Binding SelectedFullGame.HasLoadFailure, Converter={StaticResource BVC}, FallbackValue=Collapsed}" Foreground="{DynamicResource {x:Static adonisUi:Brushes.AlertBrush}}" TextWrapping="Wrap" Text="{itl:LocalizedText LC_SAVE_GAME_RELOAD_UNSTABLE}" />
 
         <TextBlock Visibility="{Binding XboxIncompleteVisibility}" Foreground="{DynamicResource {x:Static adonisUi:Brushes.AlertBrush}}" TextWrapping="Wrap" Text="{itl:LocalizedText LC_SAVE_GAME_XBOX_INCOMPLETE}" />
 

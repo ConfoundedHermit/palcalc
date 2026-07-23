@@ -433,6 +433,9 @@
   <data name="LC_SAVE_GAME_INVALID" xml:space="preserve">
     <value />
   </data>
+  <data name="LC_SAVE_GAME_RELOAD_UNSTABLE" xml:space="preserve">
+    <value />
+  </data>
   <data name="LC_SAVE_GAME_LBL" xml:space="preserve">
     <value>PlayerName | PlayerLevel | DayNumber | WorldName</value>
   </data>

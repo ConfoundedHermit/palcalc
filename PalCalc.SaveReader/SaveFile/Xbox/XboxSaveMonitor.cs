@@ -1,9 +1,4 @@
-﻿using Serilog;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Serilog;
 
 namespace PalCalc.SaveReader.SaveFile.Xbox
 {
@@ -13,49 +8,93 @@ namespace PalCalc.SaveReader.SaveFile.Xbox
 
         public event Action Updated;
 
-        // TODO - eventually filter by affected save ID
-        public void Notify() => Updated?.Invoke();
+        internal void Notify() => Updated?.Invoke();
     }
 
     public class XboxFolderMonitor : IDisposable
     {
-        private Dictionary<string, XboxSaveMonitor> saveMonitorsById;
+        private static readonly ILogger logger = Log.ForContext<XboxFolderMonitor>();
 
-        FileSystemWatcher watcher;
+        private readonly Dictionary<string, XboxSaveMonitor> saveMonitorsById = [];
+        private readonly SaveChangePipeline changePipeline;
+        private readonly FileSystemWatcher watcher;
 
-        public XboxFolderMonitor(string basePath)
+        internal XboxFolderMonitor(string basePath, SaveChangePipeline changePipeline = null)
         {
-            saveMonitorsById = [];
+            this.changePipeline = changePipeline ?? new SaveChangePipeline(SaveChangePipeline.DefaultQuietInterval);
 
             watcher = new FileSystemWatcher(basePath);
             watcher.Changed += Watcher_Changed;
             watcher.Created += Watcher_Changed;
-            watcher.Renamed += Watcher_Changed;
+            watcher.Renamed += Watcher_Renamed;
             watcher.Deleted += Watcher_Changed;
 
             watcher.IncludeSubdirectories = true;
             watcher.EnableRaisingEvents = true;
         }
 
-        public event Action Updated;
+        internal event Action<RawSaveChangeEvent> RawChanged;
 
-        private void Watcher_Changed(object sender, FileSystemEventArgs e)
+        private void Watcher_Changed(object sender, FileSystemEventArgs e) =>
+            RawChanged?.Invoke(RawSaveChangeEvent.Create(SaveChangeEventSource.XboxWgsFolderWatcher, e.ChangeType, e.FullPath));
+
+        private void Watcher_Renamed(object sender, RenamedEventArgs e)
         {
-            Updated?.Invoke();
+            RawChanged?.Invoke(RawSaveChangeEvent.Create(SaveChangeEventSource.XboxWgsFolderWatcher, e.ChangeType, e.FullPath));
+            RawChanged?.Invoke(RawSaveChangeEvent.Create(SaveChangeEventSource.XboxWgsFolderWatcher, e.ChangeType, e.OldFullPath));
+        }
 
-            foreach (var monitor in saveMonitorsById.Values)
-                monitor.Notify();
+        internal SaveChangeEventOutcome RouteKnownSaveChange(string saveId, RawSaveChangeEvent rawEvent)
+        {
+            XboxSaveMonitor monitor;
+            lock (saveMonitorsById)
+            {
+                if (!saveMonitorsById.TryGetValue(saveId, out monitor))
+                {
+                    logger.Warning(
+                        "Ignored WGS save change at {path}; classified save ID {saveId} is not registered",
+                        rawEvent.Path,
+                        saveId);
+                    return SaveChangeEventOutcome.Ignored;
+                }
+            }
+
+            return changePipeline.Process(saveId, rawEvent, isRelevant: true, _ => monitor.Notify());
         }
 
         public XboxSaveMonitor GetSaveMonitor(string saveId)
         {
-            if (saveMonitorsById.ContainsKey(saveId)) return saveMonitorsById[saveId];
+            lock (saveMonitorsById)
+            {
+                if (saveMonitorsById.TryGetValue(saveId, out var existing))
+                    return existing;
 
-            var res = new XboxSaveMonitor(saveId);
-            saveMonitorsById.Add(saveId, res);
-            return res;
+                var result = new XboxSaveMonitor(saveId);
+                saveMonitorsById.Add(saveId, result);
+                return result;
+            }
         }
 
-        public void Dispose() => watcher?.Dispose();
+        public void ReleaseSaveMonitor(XboxSaveMonitor monitor)
+        {
+            lock (saveMonitorsById)
+            {
+                if (saveMonitorsById.TryGetValue(monitor.SaveId, out var existing) && existing == monitor)
+                    saveMonitorsById.Remove(monitor.SaveId);
+            }
+        }
+
+        public void Dispose()
+        {
+            watcher.Changed -= Watcher_Changed;
+            watcher.Created -= Watcher_Changed;
+            watcher.Renamed -= Watcher_Renamed;
+            watcher.Deleted -= Watcher_Changed;
+            watcher.Dispose();
+            changePipeline.Dispose();
+
+            lock (saveMonitorsById)
+                saveMonitorsById.Clear();
+        }
     }
 }

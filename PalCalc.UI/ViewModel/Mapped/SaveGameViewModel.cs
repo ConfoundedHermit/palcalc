@@ -69,18 +69,36 @@ namespace PalCalc.UI.ViewModel.Mapped
 
             ReloadSaveCommand = new RelayCommand(() =>
             {
+                isManualReloadPending = true;
                 Storage.ReloadSave(containerLocation, value, PalDB.LoadEmbedded(), GameSettingsViewModel.Load(value).ModelObject);
             });
 
             Storage.SaveReloaded += RespondToChanges;
             CachedSaveGame.SaveFileLoadEnd += (save, cached) =>
             {
-                if (save == value) HasLoadFailure = false;
+                if (save == value)
+                {
+                    HasLoadFailure = false;
+                    isManualReloadPending = false;
+                    hasShownLoadFailureNotification = false;
+                }
                 RespondToChanges(save);
             };
             CachedSaveGame.SaveFileLoadError += (save, _) =>
             {
-                if (save == value) HasLoadFailure = true;
+                if (save != value) return;
+
+                App.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    HasLoadFailure = true;
+                    if (!isManualReloadPending || hasShownLoadFailureNotification) return;
+
+                    hasShownLoadFailureNotification = true;
+                    isManualReloadPending = false;
+                    MessageBox.Show(
+                        LocalizationCodes.LC_SAVE_GAME_RELOAD_UNSTABLE.Bind().Value,
+                        caption: "");
+                });
             };
         }
 
@@ -161,7 +179,7 @@ namespace PalCalc.UI.ViewModel.Mapped
         }
 
         [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(HasWarnings))]
+        [NotifyPropertyChangedFor(nameof(HasWarnings), nameof(HasInvalidSave))]
         private bool isValid;
 
         [ObservableProperty]
@@ -170,7 +188,11 @@ namespace PalCalc.UI.ViewModel.Mapped
 
         public bool HasWarnings => !IsValid || HasLoadFailure;
 
+        public bool HasInvalidSave => !IsValid;
+
         private bool hasChanges;
+        private bool isManualReloadPending;
+        private bool hasShownLoadFailureNotification;
         public bool HasChanges
         {
             get => hasChanges;

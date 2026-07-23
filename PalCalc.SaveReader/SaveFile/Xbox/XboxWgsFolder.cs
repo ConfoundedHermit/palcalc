@@ -45,12 +45,38 @@ namespace PalCalc.SaveReader.SaveFile.Xbox
             ContainerIndexPath = Path.Combine(UserBasePath, "containers.index");
 
             Monitor = new XboxFolderMonitor(UserBasePath);
-            Monitor.Updated += Monitor_Updated;
+            Monitor.RawChanged += Monitor_RawChanged;
         }
 
-        private void Monitor_Updated()
+        private void Monitor_RawChanged(RawSaveChangeEvent rawEvent)
         {
+            var entriesBeforeChange = cachedEntries;
             cachedEntries = null;
+
+            if (entriesBeforeChange is null)
+            {
+                logger.Information("Ignored WGS save change at {path}; no entry cache is available for classification", rawEvent.Path);
+                return;
+            }
+
+            var affectedEntry = entriesBeforeChange.FirstOrDefault(entry =>
+                string.Equals(entry.FilePath, rawEvent.Path, StringComparison.OrdinalIgnoreCase));
+            if (affectedEntry is null)
+            {
+                logger.Information("Ignored WGS save change at {path}; path is not a known save entry", rawEvent.Path);
+                return;
+            }
+
+            if (!SaveChangePathClassifier.TryGetSaveIdFromWgsEntryName(affectedEntry.FileName, out var saveId))
+            {
+                logger.Warning(
+                    "Ignored WGS save change at {path}; logical entry name {entryName} is unsupported",
+                    rawEvent.Path,
+                    affectedEntry.FileName);
+                return;
+            }
+
+            Monitor.RouteKnownSaveChange(saveId, rawEvent);
         }
 
         private IEnumerable<XboxWgsEntry> PalworldWgsEntries

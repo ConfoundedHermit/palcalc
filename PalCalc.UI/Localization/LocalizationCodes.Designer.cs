@@ -750,6 +750,10 @@ namespace PalCalc.UI.Localization {
         /// <summary>
         ///   Looks up a localized string similar to .
         /// </summary>
+        LC_SAVE_GAME_RELOAD_UNSTABLE,
+        /// <summary>
+        ///   Looks up a localized string similar to .
+        /// </summary>
         LC_SAVE_GAME_REMOVE_BTN_LABEL,
         /// <summary>
         ///   Looks up a localized string similar to .

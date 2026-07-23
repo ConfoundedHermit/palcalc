@@ -663,6 +663,9 @@ This will not delete the save files from your computer.</value>
   <data name="LC_SAVE_GAME_INVALID" xml:space="preserve">
     <value>The selected save file is invalid!</value>
   </data>
+  <data name="LC_SAVE_GAME_RELOAD_UNSTABLE" xml:space="preserve">
+    <value>Save update could not be read yet. Your previously loaded data is still available. Try reloading again shortly.</value>
+  </data>
   <data name="LC_SAVE_GAME_LBL" xml:space="preserve">
     <value>{PlayerName} lv {PlayerLevel} in {WorldName} day {DayNumber}</value>
   </data>

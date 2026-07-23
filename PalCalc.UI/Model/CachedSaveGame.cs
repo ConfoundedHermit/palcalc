@@ -4,6 +4,7 @@ using PalCalc.SaveReader;
 using PalCalc.SaveReader.SaveFile;
 using PalCalc.UI.Localization;
 using PalCalc.UI.View;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -21,6 +22,7 @@ namespace PalCalc.UI.Model
 {
     public class CachedSaveGame
     {
+        private static readonly ILogger logger = Log.ForContext<CachedSaveGame>();
         private static readonly string SaveReaderVersion = "v44";
 
         public CachedSaveGame(ISaveGame underlyingSave)
@@ -183,7 +185,7 @@ namespace PalCalc.UI.Model
             CachedSaveGame result = PCDebug.HandleErrors(
                 action: () =>
                 {
-                    return loadingModal.ShowDialogDuring(() =>
+                    return loadingModal.ShowDialogDuring(() => new SaveReloadRetryPolicy().Execute(() =>
                     {
                         GameMeta meta = null;
                         // `LevelMeta` is sometimes unavailable for Xbox saves, which shouldn't prevent us from
@@ -206,10 +208,15 @@ namespace PalCalc.UI.Model
                             WorldName = meta?.WorldName ?? "UNKNOWN WORLD",
                             InGameDay = meta?.InGameDay ?? 0,
                         };
-                    });
+                    }));
                 },
                 handleErr: (ex) =>
                 {
+                    logger.Warning(
+                        ex,
+                        "Save reload failed after {attemptCount} attempts for {saveId}; keeping the previous cached snapshot when available",
+                        SaveReloadRetryPolicy.Delays.Count + 1,
+                        IdentifierFor(game));
                     SaveFileLoadError?.Invoke(game, ex);
                     return null;
                 }

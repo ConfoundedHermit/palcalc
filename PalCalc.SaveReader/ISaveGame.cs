@@ -50,6 +50,7 @@ namespace PalCalc.SaveReader
         private static ILogger logger = Log.ForContext<StandardSaveGame>();
 
         private FileSystemWatcher folderWatcher;
+        private SaveChangePipeline changePipeline;
         public event Action<ISaveGame> Updated;
 
         private bool MatchesPath(string fileFullName, string baseFullName)
@@ -138,7 +139,9 @@ namespace PalCalc.SaveReader
                 folderWatcher.Changed += FolderWatcher_Updated;
                 folderWatcher.Created += FolderWatcher_Updated;
                 folderWatcher.Deleted += FolderWatcher_Updated;
-                folderWatcher.Renamed += FolderWatcher_Updated;
+                folderWatcher.Renamed += FolderWatcher_Renamed;
+
+                changePipeline = new SaveChangePipeline(SaveChangePipeline.DefaultQuietInterval);
 
                 folderWatcher.IncludeSubdirectories = true;
                 folderWatcher.EnableRaisingEvents = true;
@@ -156,16 +159,37 @@ namespace PalCalc.SaveReader
                 folderWatcher.Changed -= FolderWatcher_Updated;
                 folderWatcher.Created -= FolderWatcher_Updated;
                 folderWatcher.Deleted -= FolderWatcher_Updated;
-                folderWatcher.Renamed -= FolderWatcher_Updated;
+                folderWatcher.Renamed -= FolderWatcher_Renamed;
                 folderWatcher.Dispose();
 
                 folderWatcher = null;
             }
+
+            changePipeline?.Dispose();
+            changePipeline = null;
         }
 
         private void FolderWatcher_Updated(object sender, FileSystemEventArgs e)
         {
-            Updated?.Invoke(this);
+            ProcessFileSystemEvent(e.ChangeType, e.FullPath);
+        }
+
+        private void FolderWatcher_Renamed(object sender, RenamedEventArgs e)
+        {
+            if (SaveChangePathClassifier.IsRelevantStandardSavePath(BasePath, e.FullPath))
+                ProcessFileSystemEvent(e.ChangeType, e.FullPath);
+            else
+                ProcessFileSystemEvent(e.ChangeType, e.OldFullPath);
+        }
+
+        private void ProcessFileSystemEvent(WatcherChangeTypes changeType, string path)
+        {
+            var rawEvent = RawSaveChangeEvent.Create(SaveChangeEventSource.StandardFileSystemWatcher, changeType, path);
+            changePipeline?.Process(
+                BasePath,
+                rawEvent,
+                SaveChangePathClassifier.IsRelevantStandardSavePath(BasePath, path),
+                _ => Updated?.Invoke(this));
         }
 
         public string BasePath { get; private set; }
@@ -269,7 +293,11 @@ namespace PalCalc.SaveReader
 
         private void Monitor_Updated() => Updated?.Invoke(this);
 
-        public void Dispose() => this.monitor.Updated -= Monitor_Updated;
+        public void Dispose()
+        {
+            this.monitor.Updated -= Monitor_Updated;
+            this.wgsFolder.Monitor.ReleaseSaveMonitor(this.monitor);
+        }
 
         public string BasePath { get; }
 
