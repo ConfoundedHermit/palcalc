@@ -1,0 +1,49 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore --runtime win-x64 /p:NuGetAudit=true -warnaserror:NU1903,NU1904
+
+      - name: Build solution
+        run: dotnet build --configuration Release /p:Platform=x64 --no-restore -warnaserror:NU1903,NU1904
+
+      - name: Run test suite
+        shell: pwsh
+        run: |
+          $timer = [Diagnostics.Stopwatch]::StartNew()
+          dotnet test --configuration Release /p:Platform=x64 --no-build --no-restore --logger trx --results-directory TestResults
+          $testExitCode = $LASTEXITCODE
+          $timer.Stop()
+          Write-Host "Test suite duration: $($timer.Elapsed)"
+          if ($timer.Elapsed.TotalMinutes -gt 5) {
+            Write-Error 'The test suite exceeded its five-minute budget.'
+            exit 1
+          }
+
+          exit $testExitCode
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: TestResults/**/*.trx
+          if-no-files-found: warn
+          retention-days: 14

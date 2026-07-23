@@ -4,6 +4,7 @@ bin/
 cache/
 data/
 publish/
+TestResults/
 Level.sav.json
 
 character*.json
