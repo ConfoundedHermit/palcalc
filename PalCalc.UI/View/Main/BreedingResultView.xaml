@@ -84,7 +84,7 @@
                     <StackPanel DockPanel.Dock="Right" Orientation="Vertical" HorizontalAlignment="Stretch">
                         <StackPanel.Resources>
                             <DataTemplate DataType="mvm:SpecificPalRefLocationViewModel" x:Key="LocationPopupContent">
-                                <vu:PopupToolTipContent Background="#040F15">
+                                <vu:PopupToolTipContent>
                                     <StackPanel>
                                         <!-- (some nodes, like composites, have styles which override text size - ensure consistent size in popups) -->
                                         <StackPanel.Resources>
@@ -213,7 +213,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type graphSharp:VertexControl}">
                         <Border BorderBrush="{DynamicResource {x:Static adonisUi:Brushes.Layer1IntenseHighlightBorderBrush}}" 
-                                Background="#111217"
+                                Background="{DynamicResource {x:Static adonisUi:Brushes.Layer1BackgroundBrush}}"
                                 BorderThickness="2"
                                 CornerRadius="10,10,10,10"
                                 Padding="{TemplateBinding Padding}">
