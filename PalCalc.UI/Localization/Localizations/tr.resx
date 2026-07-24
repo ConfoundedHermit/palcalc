@@ -367,7 +367,7 @@ Destek sorularınızla birlikte göndereceğiniz oluşturulan ZIP dosyasını l�
     <value>, </value>
   </data>
   <data name="LC_LOC_COORD_BASE" xml:space="preserve">
-    <value>Üs, slot ({X},{Y})</value>
+    <value>{BaseName}, slot ({X},{Y})</value>
   </data>
   <data name="LC_LOC_COORD_DPS" xml:space="preserve">
     <value>Dim. depolama, tab {Tab} at ({X},{Y})</value>

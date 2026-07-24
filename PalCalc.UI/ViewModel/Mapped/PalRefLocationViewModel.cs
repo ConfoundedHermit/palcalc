@@ -118,9 +118,15 @@ namespace PalCalc.UI.ViewModel.Mapped
                     sourceBase = source?.Bases?.FirstOrDefault(b => b.Container?.Id == ownedLoc.Location.ContainerId);
 
                     var baseCoord = PalDisplayCoord.FromLocation(settings, ownedLoc.Location);
+                    var baseMapCoord = MapCoordViewModel.FromBase(sourceBase);
+                    var baseName = baseMapCoord != null
+                        ? LocalizationCodes.LC_BASE_LABEL.Bind(baseMapCoord.DisplayCoordsText)
+                        : LocalizationCodes.LC_PAL_LOC_BASE.Bind();
+
                     LocationCoordDescription = LocalizationCodes.LC_LOC_COORD_BASE.Bind(
                         new
                         {
+                            BaseName = baseName,
                             X = baseCoord.X,
                             Y = baseCoord.Y,
                         }

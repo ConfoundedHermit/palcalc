@@ -362,7 +362,7 @@
     <value>, </value>
   </data>
   <data name="LC_LOC_COORD_BASE" xml:space="preserve">
-    <value>기지, 슬롯 ({X},{Y})</value>
+    <value>{BaseName}, 슬롯 ({X},{Y})</value>
   </data>
   <data name="LC_LOC_COORD_DPS" xml:space="preserve">
     <value>차원 저장소, 탭 {Tab} 위치 ({X},{Y})</value>

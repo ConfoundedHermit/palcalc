@@ -384,7 +384,7 @@ namespace PalCalc.UI.Localization {
         /// </summary>
         LC_LIST_SEPARATOR,
         /// <summary>
-        ///   Looks up a localized string similar to X | Y.
+        ///   Looks up a localized string similar to BaseName | X | Y.
         /// </summary>
         LC_LOC_COORD_BASE,
         /// <summary>

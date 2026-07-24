@@ -332,7 +332,7 @@
     <value>，</value>
   </data>
   <data name="LC_LOC_COORD_BASE" xml:space="preserve">
-    <value>据点内, ({X}列,{Y}排)</value>
+    <value>{BaseName}内, ({X}列,{Y}排)</value>
   </data>
   <data name="LC_LOC_COORD_PALBOX" xml:space="preserve">
     <value>帕鲁终端，第{Tab}页 ({X}列,{Y}排)</value>
