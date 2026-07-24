@@ -41,6 +41,10 @@ namespace PalCalc.SaveReader
         // Flag to indicate if the save game is on the local file system (affects whether `Updated` get used)
         bool IsLocal { get; }
 
+        // A symbolic link may point outside the directory monitored by this save's FileSystemWatcher.
+        // Such saves need to offer an explicit reload because writes to the target may not raise Updated.
+        bool RequiresManualRefresh => false;
+
         // note: won't be invoked for changes to Global Pal Storage, which isn't tied to any specific save
         event Action<ISaveGame> Updated;
     }
@@ -226,6 +230,34 @@ namespace PalCalc.SaveReader
         public bool IsValid => Level != null && Level.IsValid;
 
         public bool IsLocal { get; private set; }
+
+        public bool RequiresManualRefresh => RelevantSaveFiles
+            .SelectMany(file => file.FilePaths)
+            .Any(IsSymbolicLink);
+
+        private IEnumerable<ISaveFile> RelevantSaveFiles =>
+            new ISaveFile[] { Level, LevelMeta, LocalData, WorldOption }
+                .Concat(Players)
+                .Concat(Players.Select(player => player.DimensionalPalStorageSaveFile))
+                .Where(file => file != null);
+
+        private static bool IsSymbolicLink(string path)
+        {
+            try
+            {
+                return new FileInfo(path).LinkTarget != null;
+            }
+            catch (IOException ex)
+            {
+                logger.Debug(ex, "Unable to determine whether save file is a symbolic link: {savePath}", path);
+                return false;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                logger.Debug(ex, "Unable to determine whether save file is a symbolic link: {savePath}", path);
+                return false;
+            }
+        }
 
         public override string ToString() => FolderName;
     }

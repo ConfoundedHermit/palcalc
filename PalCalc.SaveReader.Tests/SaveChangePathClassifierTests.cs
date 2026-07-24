@@ -141,6 +141,41 @@ public class SaveChangePathClassifierTests
     }
 
     [TestMethod]
+    public void StandardSaveGame_RequiresManualRefreshForSymbolicLink()
+    {
+        var saveRoot = Path.Combine(Path.GetTempPath(), $"palcalc-save-link-tests-{Guid.NewGuid():N}");
+        var targetPath = Path.Combine(Path.GetTempPath(), $"palcalc-save-link-target-{Guid.NewGuid():N}.sav");
+        var linkPath = Path.Combine(saveRoot, "Level.sav");
+        Directory.CreateDirectory(saveRoot);
+
+        try
+        {
+            File.WriteAllText(targetPath, "test");
+            try
+            {
+                File.CreateSymbolicLink(linkPath, targetPath);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Assert.Inconclusive($"Creating symbolic links is not permitted in this environment: {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                Assert.Inconclusive($"Creating symbolic links is not permitted in this environment: {ex.Message}");
+            }
+
+            using var save = new StandardSaveGame(saveRoot);
+
+            Assert.IsTrue(save.RequiresManualRefresh);
+        }
+        finally
+        {
+            Directory.Delete(saveRoot, recursive: true);
+            File.Delete(targetPath);
+        }
+    }
+
+    [TestMethod]
     public async Task XboxFolderMonitor_NotifiesOnlyTheClassifiedSave()
     {
         var folderPath = Path.Combine(Path.GetTempPath(), $"palcalc-xbox-monitor-tests-{Guid.NewGuid():N}");

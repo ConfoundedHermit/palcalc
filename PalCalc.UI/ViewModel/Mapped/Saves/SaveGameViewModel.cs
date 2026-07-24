@@ -204,8 +204,11 @@ namespace PalCalc.UI.ViewModel.SaveSelection
         [ObservableProperty]
         private int? dayNumber;
 
+        [NotifyPropertyChangedFor(nameof(ShowReloadButton))]
         [ObservableProperty]
         private bool hasChanges;
+
+        public bool ShowReloadButton => HasChanges || Value.RequiresManualRefresh;
 
         [ObservableProperty]
         private bool hasLoadFailure;

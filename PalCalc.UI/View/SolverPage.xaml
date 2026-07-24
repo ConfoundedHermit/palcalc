@@ -58,7 +58,7 @@
 
                                 <Button Grid.Column="2"
                                         HorizontalAlignment="Right"
-                                        Visibility="{Binding OpenedSave.HasChanges, Converter={StaticResource VVC}, FallbackValue=Collapsed}"
+                                        Visibility="{Binding OpenedSave.ShowReloadButton, Converter={StaticResource VVC}, FallbackValue=Collapsed}"
                                         Command="{Binding OpenedSave.ReloadSaveCommand}"
                                         ToolTipService.ToolTip="{itl:LocalizedText Code=LC_SAVE_FILE_RELOAD_DESCRIPTION}"
                                         >
