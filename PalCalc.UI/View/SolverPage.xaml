@@ -69,6 +69,11 @@
                             </Grid>
                          </Border>
 
+                        <TextBlock TextWrapping="Wrap"
+                                   Foreground="{DynamicResource {x:Static adonisUi:Brushes.AlertBrush}}"
+                                   Text="{itl:LocalizedText LC_SAVE_GAME_RELOAD_UNSTABLE}"
+                                   Visibility="{Binding OpenedSave.HasLoadFailure, Converter={StaticResource VVC}}" />
+
                         <!-- "Game Settings" section -->
                         <Expander IsExpanded="True" adonisExtensions:LayerExtension.IncreaseLayer="True">
                             <Expander.Header>

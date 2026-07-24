@@ -72,6 +72,16 @@ namespace PalCalc.UI.ViewModel.SaveSelection
                     CachedSaveGame.SaveFileLoadEnd -= saveLoadEnded;
             };
             CachedSaveGame.SaveFileLoadEnd += saveLoadEnded;
+
+            Action<ISaveGame, Exception> saveLoadFailed = null;
+            saveLoadFailed = (changedSave, _) =>
+            {
+                if (weakSelf.TryGetTarget(out var vm))
+                    vm.RespondToLoadFailure(changedSave);
+                else
+                    CachedSaveGame.SaveFileLoadError -= saveLoadFailed;
+            };
+            CachedSaveGame.SaveFileLoadError += saveLoadFailed;
         }
 
         private void QueueHasChanges()
@@ -100,9 +110,24 @@ namespace PalCalc.UI.ViewModel.SaveSelection
             dispatcher.BeginInvoke(() => UpdateAfterChange(changedSave));
         }
 
+        private void RespondToLoadFailure(ISaveGame changedSave)
+        {
+            if (changedSave != Value) return;
+
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess())
+            {
+                HasLoadFailure = true;
+                return;
+            }
+
+            dispatcher.BeginInvoke(() => HasLoadFailure = true);
+        }
+
         private void UpdateAfterChange(ISaveGame changedSave)
         {
             ReadSaveProperties();
+            HasLoadFailure = false;
             HasChanges = !changedSave.IsLocal;
         }
 
@@ -181,6 +206,9 @@ namespace PalCalc.UI.ViewModel.SaveSelection
 
         [ObservableProperty]
         private bool hasChanges;
+
+        [ObservableProperty]
+        private bool hasLoadFailure;
 
         public SaveCustomizationsViewModel Customizations => SaveCustomizationsViewModel.GetOrCreate(Value);
 

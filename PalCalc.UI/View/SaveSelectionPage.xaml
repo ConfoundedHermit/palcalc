@@ -303,20 +303,26 @@
                 </Grid>
 
                 <!-- Warnings -->
-                <ItemsControl ItemsSource="{Binding SelectedSave.Warnings}" Grid.Row="1" Margin="0,0,0,12" Visibility="{Binding SelectedSave.Warnings, Converter={StaticResource CVC}}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Vertical" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock TextWrapping="Wrap"
-                                       Foreground="{DynamicResource {x:Static adonisUi:Brushes.AlertBrush}}"
-                                       Text="{Binding Value}" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                    <TextBlock TextWrapping="Wrap"
+                               Foreground="{DynamicResource {x:Static adonisUi:Brushes.AlertBrush}}"
+                               Text="{itl:LocalizedText LC_SAVE_GAME_RELOAD_UNSTABLE}"
+                               Visibility="{Binding SelectedSave.HasLoadFailure, Converter={StaticResource VVC}}" />
+                    <ItemsControl ItemsSource="{Binding SelectedSave.Warnings}" Visibility="{Binding SelectedSave.Warnings, Converter={StaticResource CVC}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Vertical" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock TextWrapping="Wrap"
+                                           Foreground="{DynamicResource {x:Static adonisUi:Brushes.AlertBrush}}"
+                                           Text="{Binding Value}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
 
                 <!-- Properties -->
                 <StackPanel Grid.Row="2" Margin="{adonisUi:Space 1}">
