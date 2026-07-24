@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using PalCalc.Model;
 using PalCalc.Solver;
 using PalCalc.Solver.PalReference;
@@ -6,55 +6,39 @@ using PalCalc.Solver.ResultPruning;
 using PalCalc.UI.Localization;
 using PalCalc.UI.ViewModel.Mapped;
 using QuickGraph;
-using QuickGraph.Algorithms;
+using Serilog;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
-using Windows.Devices.Geolocation;
 
 namespace PalCalc.UI.ViewModel.Solver
 {
+    internal delegate List<IPalReference> SolverJobRunner(PalSpecifier spec, SolverStateController controller);
+
     public class SolverJobViewModel : ObservableObject, IDisposable
     {
-        private Thread thread;
-        private Stopwatch sw;
+        private static readonly ILogger logger = Log.ForContext<SolverJobViewModel>();
+        private const int ProgressUpdateIntervalMilliseconds = 100;
 
-        // (dispatcher.HasShutdownStarted checks added in case a job fails, causes UI shutdown, and remaining
-        // jobs continue due to Dispose but throw more errors due to UI env. shutdown)
-        private Dispatcher dispatcher;
-        private BreedingSolver solver;
-        private CancellationTokenSource tokenSource;
-        private SolverStateController solverController;
+        private readonly Dispatcher dispatcher;
+        private readonly SolverJobRunner runner;
+        private readonly CancellationTokenSource tokenSource = new();
+        private readonly SolverStateController solverController;
+        private readonly TaskCompletionSource<SolverJobTerminalResult> terminalResultSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly Action unsubscribeProgress;
+        private readonly Stopwatch stopwatch = new();
 
-        public PalSpecifierViewModel Specifier { get; }
-
+        private Task workerTask;
+        private long lastProgressUpdateTimestamp;
+        private int executionGeneration;
+        private bool disposed;
         private int lastStepIndex = -1;
 
-        protected override void OnPropertyChanging(PropertyChangingEventArgs e)
-        {
-            if (dispatcher.HasShutdownStarted) return;
-
-            if (Thread.CurrentThread == dispatcher.Thread)
-                base.OnPropertyChanging(e);
-            else
-                dispatcher.BeginInvoke(() => base.OnPropertyChanging(e));
-        }
-
-        protected override void OnPropertyChanged(PropertyChangedEventArgs e)
-        {
-            if (dispatcher.HasShutdownStarted) return;
-
-            if (Thread.CurrentThread == dispatcher.Thread)
-                base.OnPropertyChanged(e);
-            else
-                dispatcher.BeginInvoke(() => base.OnPropertyChanged(e));
-        }
+        public PalSpecifierViewModel Specifier { get; }
 
         private SolverState currentState;
         public SolverState CurrentState
@@ -68,6 +52,13 @@ namespace PalCalc.UI.ViewModel.Solver
                     OnPropertyChanged(nameof(IsInactive));
                 }
             }
+        }
+
+        private SolverJobLifecycleState lifecycleState;
+        public SolverJobLifecycleState LifecycleState
+        {
+            get => lifecycleState;
+            private set => SetProperty(ref lifecycleState, value);
         }
 
         private double solverProgress;
@@ -98,229 +89,297 @@ namespace PalCalc.UI.ViewModel.Solver
             private set => SetProperty(ref stepStatusMessage, value);
         }
 
-        public bool IsActive => CurrentState != SolverState.Idle;
+        public bool IsActive => LifecycleState is SolverJobLifecycleState.Queued
+            or SolverJobLifecycleState.Running
+            or SolverJobLifecycleState.Paused
+            or SolverJobLifecycleState.Cancelling;
+
         public bool IsInactive => !IsActive;
+        public bool IsTerminal => LifecycleState is SolverJobLifecycleState.Completed
+            or SolverJobLifecycleState.Cancelled
+            or SolverJobLifecycleState.Failed;
 
-        // state ID associated with the save when this job was created, used to determine whether
-        // the results need to be refreshed once the solver completes
         public int SaveStateId { get; }
-
         public List<IPalReference> Results { get; private set; }
-
-        public event Action<SolverJobViewModel> JobStopped;
-        public event Action<SolverJobViewModel> JobCompleted;
-        public event Action<SolverJobViewModel> JobCancelled;
+        public Task<SolverJobTerminalResult> TerminalResult => terminalResultSource.Task;
 
         public SolverJobViewModel(
             Dispatcher dispatcher,
             BreedingSolver solver,
             PalSpecifierViewModel spec,
             int saveStateId
+        ) : this(dispatcher, spec, saveStateId, solver.SolveFor)
+        {
+            solver.SolverStateUpdated += OnSolverStateUpdated;
+            unsubscribeProgress = () => solver.SolverStateUpdated -= OnSolverStateUpdated;
+        }
+
+        internal SolverJobViewModel(
+            Dispatcher dispatcher,
+            PalSpecifierViewModel spec,
+            int saveStateId,
+            SolverJobRunner runner
         )
         {
-            this.dispatcher = dispatcher;
-            this.solver = solver;
-
-            Specifier = spec;
-
-            tokenSource = new CancellationTokenSource();
-            solverController = new SolverStateController()
-            {
-                CancellationToken = tokenSource.Token
-            };
-
-            solver.SolverStateUpdated += Solver_SolverStateUpdated;
-
+            this.dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+            this.runner = runner ?? throw new ArgumentNullException(nameof(runner));
+            Specifier = spec ?? throw new ArgumentNullException(nameof(spec));
             SaveStateId = saveStateId;
+            solverController = new SolverStateController { CancellationToken = tokenSource.Token };
+            LifecycleState = SolverJobLifecycleState.Queued;
             CurrentState = SolverState.Paused;
         }
 
-        public void Run()
+        /// <summary>
+        /// Starts a queued job or resumes a paused one. The task always completes with
+        /// one terminal result; it never exposes a worker exception to the UI.
+        /// </summary>
+        public Task<SolverJobTerminalResult> RunAsync()
         {
-            if (thread == null)
-            {
-                thread = new Thread(() => RunSolver(Specifier.ModelObject));
+            VerifyDispatcherAccess();
+            if (IsTerminal || LifecycleState == SolverJobLifecycleState.Cancelling)
+                return TerminalResult;
 
-                thread.Priority = ThreadPriority.BelowNormal;
-                thread.Start();
+            if (workerTask == null)
+            {
+                TransitionTo(SolverJobLifecycleState.Running);
+                CurrentState = SolverState.Running;
+                stopwatch.Start();
+                var generation = ++executionGeneration;
+                workerTask = Task.Run(() => RunWorker(generation));
+            }
+            else if (LifecycleState == SolverJobLifecycleState.Paused)
+            {
+                solverController.Resume();
+                TransitionTo(SolverJobLifecycleState.Running);
+                CurrentState = SolverState.Running;
             }
 
-            solverController.Resume();
-            CurrentState = SolverState.Running;
+            return TerminalResult;
         }
+
+        public void Run() => _ = RunAsync();
 
         public void Pause()
         {
-            if (thread == null) return;
+            VerifyDispatcherAccess();
+            if (workerTask == null || LifecycleState != SolverJobLifecycleState.Running)
+                return;
 
             solverController.Pause();
-
-            // we'd prefer to get the current state from the solver's update events,
-            // but not everything is wired up to emit those events (namely `WorkingSet`)
+            TransitionTo(SolverJobLifecycleState.Paused);
             CurrentState = SolverState.Paused;
         }
 
         public void Cancel()
         {
-            if (thread == null)
+            VerifyDispatcherAccess();
+            if (IsTerminal || LifecycleState == SolverJobLifecycleState.Cancelling)
+                return;
+
+            tokenSource.Cancel();
+            solverController.Resume();
+
+            if (workerTask == null)
             {
-                JobCancelled?.Invoke(this);
-                JobStopped?.Invoke(this);
+                TransitionTo(SolverJobLifecycleState.Cancelled);
                 CurrentState = SolverState.Idle;
+                terminalResultSource.TrySetResult(new(SolverJobOutcome.Cancelled, []));
+                return;
             }
-            else
+
+            TransitionTo(SolverJobLifecycleState.Cancelling);
+        }
+
+        /// <summary>
+        /// Applies the terminal result on the owning UI dispatcher. Only
+        /// SolverQueueViewModel calls this after confirming the job generation is current.
+        /// </summary>
+        internal void ApplyTerminalResult(SolverJobTerminalResult terminalResult)
+        {
+            VerifyDispatcherAccess();
+            if (IsTerminal)
+                return;
+
+            switch (terminalResult.Outcome)
             {
-                tokenSource?.Cancel();
-                solverController?.Resume();
+                case SolverJobOutcome.Completed:
+                    Results = terminalResult.Results;
+                    TransitionTo(SolverJobLifecycleState.Completed);
+                    break;
+                case SolverJobOutcome.Cancelled:
+                    TransitionTo(SolverJobLifecycleState.Cancelled);
+                    break;
+                case SolverJobOutcome.Failed:
+                    TransitionTo(SolverJobLifecycleState.Failed);
+                    break;
             }
+
+            CurrentState = SolverState.Idle;
         }
 
         public void Dispose()
         {
+            if (disposed)
+                return;
+
+            disposed = true;
+            unsubscribeProgress?.Invoke();
             Cancel();
-            thread?.Join();
-            tokenSource.Dispose();
+            // Do not wait here: Dispose can run on the UI thread during shutdown.
         }
 
-        private void RunSolver(PalSpecifier spec)
+        private void RunWorker(int generation)
         {
+            SolverJobTerminalResult terminalResult;
             try
             {
-                List<IPalReference> results;
-                try
-                {
-                    results = solver.SolveFor(spec, solverController);
-                }
-                catch (OperationCanceledException)
-                {
-                    results = [];
-                }
-
-                if (dispatcher.HasShutdownStarted) return;
-
-                // general simplification pass, get the best result for each potentially
-                // interesting combination of result properties
-                var resultsTable = new PalPropertyGrouping(PalProperty.Combine(
-                    PalProperty.EffectivePassives,
-                    PalProperty.NumBreedingSteps,
-                    p => p.AllReferences().Select(r => r.Location.GetType()).Distinct().SetHash()
-                ));
-                resultsTable.AddRange(results);
-                resultsTable.FilterAll(PruningRulesBuilder.Default, tokenSource.Token);
-
-                // final simplification pass, ignore any results which are over 2x the effort of the fastest option
-                resultsTable = resultsTable.BuildNew(PalProperty.Combine(
-                    PalProperty.EffectivePassives
-                ));
-                resultsTable.FilterAll(g =>
-                {
-                    // (though if "the fastest option" is just a pal we already own with 0 effort, don't count that)
-                    var nonZero = g.Where(r => r.BreedingEffort > TimeSpan.Zero).ToList();
-                    if (nonZero.Count != 0)
-                    {
-                        var fastest = g.Where(r => r.BreedingEffort > TimeSpan.Zero).Min(r => r.BreedingEffort);
-                        return g.Where(r => r.BreedingEffort <= fastest * 2);
-                    }
-                    else
-                    {
-                        return g.Take(1);
-                    }
-                });
-
-                results = resultsTable.All.ToList();
-
-                dispatcher.Invoke(() =>
-                {
-                    if (!tokenSource.IsCancellationRequested)
-                    {
-                        Results = results;
-                        JobCompleted?.Invoke(this);
-                    }
-                    else
-                    {
-                        JobCancelled?.Invoke(this);
-                    }
-
-                    JobStopped?.Invoke(this);
-
-                    CurrentState = SolverState.Idle;
-                });
+                tokenSource.Token.ThrowIfCancellationRequested();
+                var results = runner(Specifier.ModelObject, solverController);
+                tokenSource.Token.ThrowIfCancellationRequested();
+                terminalResult = new(SolverJobOutcome.Completed, SimplifyResults(results));
             }
-            catch (Exception e)
+            catch (OperationCanceledException) when (tokenSource.IsCancellationRequested)
             {
-                dispatcher.BeginInvoke(() =>
-                {
-                    // re-throw on UI thread so the app crashes (instead of hangs) with proper error handling
-                    throw new Exception("Unhandled error during solver operation", e);
-                });
+                terminalResult = new(SolverJobOutcome.Cancelled, []);
             }
+            catch (Exception error)
+            {
+                logger.Error(error, "Solver job failed for {TargetId}", Specifier.Id);
+                terminalResult = new(SolverJobOutcome.Failed, [], error);
+            }
+            finally
+            {
+                stopwatch.Stop();
+            }
+
+            if (generation == Volatile.Read(ref executionGeneration))
+                terminalResultSource.TrySetResult(terminalResult);
         }
 
-        private void Solver_SolverStateUpdated(SolverStatus obj)
+        private List<IPalReference> SimplifyResults(List<IPalReference> results)
         {
-            if (dispatcher.HasShutdownStarted) return;
+            tokenSource.Token.ThrowIfCancellationRequested();
+            var resultsTable = new PalPropertyGrouping(PalProperty.Combine(
+                PalProperty.EffectivePassives,
+                PalProperty.NumBreedingSteps,
+                p => p.AllReferences().Select(r => r.Location.GetType()).Distinct().SetHash()
+            ));
+            resultsTable.AddRange(results);
+            resultsTable.FilterAll(PruningRulesBuilder.Default, tokenSource.Token);
+
+            tokenSource.Token.ThrowIfCancellationRequested();
+            resultsTable = resultsTable.BuildNew(PalProperty.EffectivePassives);
+            resultsTable.FilterAll(g =>
+            {
+                var nonZero = g.Where(r => r.BreedingEffort > TimeSpan.Zero).ToList();
+                if (nonZero.Count == 0)
+                    return g.Take(1);
+
+                var fastest = nonZero.Min(r => r.BreedingEffort);
+                return g.Where(r => r.BreedingEffort <= fastest * 2);
+            }, tokenSource.Token);
+
+            tokenSource.Token.ThrowIfCancellationRequested();
+            return resultsTable.All.ToList();
+        }
+
+        private void OnSolverStateUpdated(SolverStatus status)
+        {
+            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || IsTerminal)
+                return;
+
+            var now = Stopwatch.GetTimestamp();
+            var minimumElapsed = Stopwatch.Frequency * ProgressUpdateIntervalMilliseconds / 1000;
+            if (now - Interlocked.Read(ref lastProgressUpdateTimestamp) < minimumElapsed)
+                return;
+
+            Interlocked.Exchange(ref lastProgressUpdateTimestamp, now);
+            var snapshot = new SolverStatus
+            {
+                CurrentPhase = status.CurrentPhase,
+                CurrentStepIndex = status.CurrentStepIndex,
+                TargetSteps = status.TargetSteps,
+                Canceled = status.Canceled,
+                Paused = status.Paused,
+                CurrentWorkSize = status.CurrentWorkSize,
+                WorkProcessedCount = status.WorkProcessedCount,
+                TotalWorkProcessedCount = status.TotalWorkProcessedCount,
+            };
+            var generation = Volatile.Read(ref executionGeneration);
+
+            dispatcher.BeginInvoke(() => ApplyProgress(snapshot, generation), DispatcherPriority.Background);
+        }
+
+        private void ApplyProgress(SolverStatus status, int generation)
+        {
+            if (generation != executionGeneration || IsTerminal || LifecycleState == SolverJobLifecycleState.Cancelling)
+                return;
 
             string FormatNum(long num) => num.ToString("#,##");
-
-            if (sw == null)
-                sw = Stopwatch.StartNew();
-
-            dispatcher.BeginInvoke(() =>
+            var numTotalSteps = (double)(1 + status.TargetSteps);
+            var overallStep = 0;
+            switch (status.CurrentPhase)
             {
-                if (!obj.Canceled)
-                    CurrentState = obj.Paused ? SolverState.Paused : SolverState.Running;
+                case SolverPhase.Initializing:
+                    SolverStatusMessage = LocalizationCodes.LC_SOLVER_STATUS_INITIALIZING.Bind();
+                    lastStepIndex = -1;
+                    StepProgress = 0;
+                    StepStatusMessage = null;
+                    break;
+                case SolverPhase.Breeding:
+                    SolverStatusMessage = LocalizationCodes.LC_SOLVER_STATUS_BREEDING.Bind(new
+                    {
+                        StepNum = status.CurrentStepIndex + 1,
+                        WorkSize = FormatNum(status.CurrentWorkSize),
+                    });
+                    overallStep = 1 + status.CurrentStepIndex;
+                    StepProgress = status.CurrentWorkSize == 0 ? 0 : 100 * status.WorkProcessedCount / status.CurrentWorkSize;
+                    StepStatusMessage = LocalizationCodes.LC_SOLVER_STEP_STATUS_BREEDING.Bind(new
+                    {
+                        NumProcessed = FormatNum(status.WorkProcessedCount),
+                        WorkSize = FormatNum(status.CurrentWorkSize),
+                    });
+                    lastStepIndex = status.CurrentStepIndex;
+                    break;
+                case SolverPhase.Finished:
+                    if (!status.Canceled)
+                    {
+                        SolverStatusMessage = LocalizationCodes.LC_SOLVER_STATUS_FINISHED.Bind(stopwatch.Elapsed.TimeSpanSecondsStr());
+                        overallStep = (int)numTotalSteps;
+                        StepProgress = 100;
+                        StepStatusMessage = LocalizationCodes.LC_SOLVER_STEP_STATUS_DONE.Bind(FormatNum(status.TotalWorkProcessedCount));
+                    }
+                    break;
+            }
 
-                var numTotalSteps = (double)(1 + obj.TargetSteps);
-                int overallStep = 0;
-                switch (obj.CurrentPhase)
-                {
-                    case SolverPhase.Initializing:
-                        SolverStatusMessage = LocalizationCodes.LC_SOLVER_STATUS_INITIALIZING.Bind();
-                        overallStep = 0;
-                        lastStepIndex = -1;
+            SolverProgress = 100 * overallStep / numTotalSteps;
+        }
 
-                        StepProgress = 0;
-                        StepStatusMessage = null;
-                        break;
+        private void TransitionTo(SolverJobLifecycleState next)
+        {
+            if (LifecycleState == next)
+                return;
 
-                    case SolverPhase.Breeding:
-                        SolverStatusMessage = LocalizationCodes.LC_SOLVER_STATUS_BREEDING.Bind(
-                            new
-                            {
-                                StepNum = obj.CurrentStepIndex + 1,
-                                WorkSize = FormatNum(obj.CurrentWorkSize),
-                            }
-                        );
-                        overallStep = 1 + obj.CurrentStepIndex;
+            var legal = LifecycleState switch
+            {
+                SolverJobLifecycleState.Queued => next is SolverJobLifecycleState.Running or SolverJobLifecycleState.Cancelled,
+                SolverJobLifecycleState.Running => next is SolverJobLifecycleState.Paused or SolverJobLifecycleState.Cancelling or SolverJobLifecycleState.Completed or SolverJobLifecycleState.Cancelled or SolverJobLifecycleState.Failed,
+                SolverJobLifecycleState.Paused => next is SolverJobLifecycleState.Running or SolverJobLifecycleState.Cancelling or SolverJobLifecycleState.Cancelled,
+                SolverJobLifecycleState.Cancelling => next is SolverJobLifecycleState.Cancelled or SolverJobLifecycleState.Failed,
+                _ => false,
+            };
 
-                        StepProgress = 100 * (obj.WorkProcessedCount / (double)obj.CurrentWorkSize);
-                        StepStatusMessage = LocalizationCodes.LC_SOLVER_STEP_STATUS_BREEDING.Bind(
-                            new { NumProcessed = FormatNum(obj.WorkProcessedCount), WorkSize = FormatNum(obj.CurrentWorkSize) }
-                        );
+            if (!legal)
+                throw new InvalidOperationException($"Illegal solver job transition: {LifecycleState} -> {next}");
 
-                        if (obj.CurrentStepIndex != lastStepIndex)
-                        {
-                            lastStepIndex = obj.CurrentStepIndex;
-                        }
-                        break;
+            LifecycleState = next;
+        }
 
-                    case SolverPhase.Finished:
-                        if (obj.Canceled)
-                        {
-                            SolverStatusMessage = null;
-                        }
-                        else
-                        {
-                            SolverStatusMessage = LocalizationCodes.LC_SOLVER_STATUS_FINISHED.Bind(sw.Elapsed.TimeSpanSecondsStr());
-                            overallStep = (int)numTotalSteps;
-                            StepProgress = 100;
-                            StepStatusMessage = LocalizationCodes.LC_SOLVER_STEP_STATUS_DONE.Bind(FormatNum(obj.TotalWorkProcessedCount));
-                        }
-                        break;
-                }
-
-                SolverProgress = 100 * overallStep / numTotalSteps;
-            }, DispatcherPriority.Send);
+        private void VerifyDispatcherAccess()
+        {
+            if (!dispatcher.CheckAccess())
+                throw new InvalidOperationException("Solver job state must be changed on its owning dispatcher.");
         }
     }
 }

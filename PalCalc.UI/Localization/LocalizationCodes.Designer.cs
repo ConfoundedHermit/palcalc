@@ -982,6 +982,18 @@ namespace PalCalc.UI.Localization {
         /// <summary>
         ///   Looks up a localized string similar to .
         /// </summary>
+        LC_SOLVER_CANCELLING_MESSAGE,
+        /// <summary>
+        ///   Looks up a localized string similar to .
+        /// </summary>
+        LC_SOLVER_CANCELLING_TITLE,
+        /// <summary>
+        ///   Looks up a localized string similar to .
+        /// </summary>
+        LC_SOLVER_FAILED,
+        /// <summary>
+        ///   Looks up a localized string similar to .
+        /// </summary>
         LC_SOLVER_PAUSE,
         /// <summary>
         ///   Looks up a localized string similar to .

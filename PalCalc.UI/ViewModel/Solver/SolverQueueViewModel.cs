@@ -1,24 +1,29 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GongSolutions.Wpf.DragDrop;
 using PalCalc.UI.Localization;
 using PalCalc.UI.ViewModel.Mapped;
-using QuickGraph;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
-using System.ComponentModel;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
-using Windows.ApplicationModel.Contacts;
 
 namespace PalCalc.UI.ViewModel.Solver
 {
-    partial class SolverQueueViewModel : ObservableObject, IDropTarget
+    internal sealed class SolverJobFinishedEventArgs(SolverJobViewModel job, SolverJobTerminalResult result) : EventArgs
+    {
+        public SolverJobViewModel Job { get; } = job;
+        public SolverJobTerminalResult Result { get; } = result;
+    }
+
+    /// <summary>
+    /// Owns queue membership and all queue-driven job state transitions. It is the
+    /// only subscriber to a job's terminal task, so every job is removed exactly once.
+    /// </summary>
+    internal partial class SolverQueueViewModel : ObservableObject, IDropTarget
     {
         private static SolverQueueViewModel designInstance;
         public static SolverQueueViewModel DesignInstance
@@ -27,7 +32,7 @@ namespace PalCalc.UI.ViewModel.Solver
             {
                 if (designInstance == null)
                 {
-                    designInstance = new SolverQueueViewModel();
+                    designInstance = new SolverQueueViewModel(Dispatcher.CurrentDispatcher);
                     designInstance.Run(PalSpecifierViewModel.DesignerInstance);
                 }
 
@@ -35,11 +40,13 @@ namespace PalCalc.UI.ViewModel.Solver
             }
         }
 
-        private ObservableCollection<PalSpecifierViewModel> orderedPendingTargets;
-        public ReadOnlyObservableCollection<PalSpecifierViewModel> QueuedItems { get; }
+        private readonly Dispatcher dispatcher;
+        private readonly ObservableCollection<PalSpecifierViewModel> orderedPendingTargets = [];
+        private readonly Dictionary<PalSpecifierViewModel, SolverJobViewModel> itemJobs = new();
+        private TaskCompletionSource queueDrained;
 
-        // (jobs may be cleared from a PalSpecifierViewModel when they're cancelled, track them here)
-        private Dictionary<PalSpecifierViewModel, SolverJobViewModel> itemJobs = new();
+        public ReadOnlyObservableCollection<PalSpecifierViewModel> QueuedItems { get; }
+        public event EventHandler<SolverJobFinishedEventArgs> JobFinished;
 
         private ILocalizedText sectionTitleWithCount;
         public ILocalizedText SectionTitleWithCount
@@ -51,120 +58,90 @@ namespace PalCalc.UI.ViewModel.Solver
         [ObservableProperty]
         private IRelayCommand<PalSpecifierViewModel> selectItemCommand;
 
-        public SolverQueueViewModel()
+        public SolverQueueViewModel(Dispatcher dispatcher = null)
         {
-            orderedPendingTargets = new ObservableCollection<PalSpecifierViewModel>();
+            this.dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
             QueuedItems = new ReadOnlyObservableCollection<PalSpecifierViewModel>(orderedPendingTargets);
-
-            orderedPendingTargets.CollectionChanged += OrderedPendingTargets_CollectionChanged;
-
+            orderedPendingTargets.CollectionChanged += (_, _) =>
+                SectionTitleWithCount = LocalizationCodes.LC_JOB_QUEUE_HEADER.Bind(QueuedItems.Count);
             SectionTitleWithCount = LocalizationCodes.LC_JOB_QUEUE_HEADER.Bind(0);
-        }
-
-        private static bool IsDesignerView = DesignerProperties.GetIsInDesignMode(new DependencyObject());
-        private void OrderedPendingTargets_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
-        {
-            if (IsDesignerView) return;
-
-            foreach (var vm in orderedPendingTargets.Where(t => !itemJobs.ContainsKey(t)))
-                itemJobs.Add(vm, vm.LatestJob);
-
-            // note: events are raised by SolverJobViewModel *before* job state is changed
-            var wasRunning = orderedPendingTargets
-                .Concat(e.NewItems?.Cast<PalSpecifierViewModel>() ?? [])
-                .Concat(e.OldItems?.Cast<PalSpecifierViewModel>() ?? [])
-                .Any(t => itemJobs.GetValueOrDefault(t)?.CurrentState == SolverState.Running);
-
-            var runningTargets = orderedPendingTargets.Where(t => itemJobs[t].CurrentState == SolverState.Running).ToList();
-            var firstItem = orderedPendingTargets.FirstOrDefault();
-
-            void RunFirstInQueue()
-            {
-                foreach (var job in runningTargets.Where(j => j != firstItem && itemJobs[j].CurrentState == SolverState.Running))
-                    itemJobs[job].Pause();
-
-                itemJobs[firstItem].Run();
-            }
-
-            switch (e.Action)
-            {
-                case NotifyCollectionChangedAction.Add:
-                    RunFirstInQueue();
-                    break;
-
-                case NotifyCollectionChangedAction.Reset:
-                    foreach (var target in runningTargets)
-                        itemJobs[target].Cancel();
-                    break;
-
-                case NotifyCollectionChangedAction.Remove:
-                    if (wasRunning && orderedPendingTargets.Count > 0)
-                        RunFirstInQueue();
-                    break;
-
-                case NotifyCollectionChangedAction.Move:
-                    if (e.OldStartingIndex == 0 || e.NewStartingIndex == 0 && wasRunning)
-                        RunFirstInQueue();
-                    break;
-
-                case NotifyCollectionChangedAction.Replace:
-                    if (e.OldStartingIndex == 0 || e.NewStartingIndex == 0 && wasRunning)
-                        RunFirstInQueue();
-                    break;
-            }
-
-            foreach (var key in itemJobs.Keys.Where(k => !orderedPendingTargets.Contains(k)).ToList())
-                itemJobs.Remove(key);
-
-            SectionTitleWithCount = LocalizationCodes.LC_JOB_QUEUE_HEADER.Bind(QueuedItems.Count);
         }
 
         public void Run(PalSpecifierViewModel item)
         {
-            if (IsDesignerView)
-            {
-                orderedPendingTargets.Add(item);
+            VerifyDispatcherAccess();
+            if (item?.LatestJob == null)
+                throw new InvalidOperationException("Queued targets must have a solver job.");
+            if (itemJobs.ContainsKey(item))
                 return;
-            }
-
-            var job = item.LatestJob;
-
-            if (job == null)
-                throw new InvalidOperationException();
-
-            job.JobStopped += Job_JobStopped;
-            job.PropertyChanged += Job_PropertyChanged;
 
             itemJobs.Add(item, item.LatestJob);
             orderedPendingTargets.Insert(0, item);
+            _ = ObserveTerminalResult(item, item.LatestJob);
+            StartFirstRunnableJob();
         }
 
-        private void Job_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        public void CancelAll()
         {
-            var job = sender as SolverJobViewModel;
-            var item = job.Specifier;
-            if (e.PropertyName != nameof(job.CurrentState))
+            VerifyDispatcherAccess();
+            foreach (var job in itemJobs.Values.Distinct().ToList())
+                job.Cancel();
+        }
+
+        /// <summary>
+        /// Requests cooperative cancellation and completes only after the queue has
+        /// observed every terminal result and removed every entry on the UI dispatcher.
+        /// </summary>
+        public Task CancelAndWaitAsync()
+        {
+            VerifyDispatcherAccess();
+            CancelAll();
+            if (orderedPendingTargets.Count == 0)
+                return Task.CompletedTask;
+
+            queueDrained ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            return queueDrained.Task;
+        }
+
+        private async Task ObserveTerminalResult(PalSpecifierViewModel item, SolverJobViewModel job)
+        {
+            var terminalResult = await job.TerminalResult.ConfigureAwait(false);
+            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
                 return;
 
-            if (job.CurrentState != SolverState.Running)
+            _ = dispatcher.BeginInvoke(() => FinishJob(item, job, terminalResult), DispatcherPriority.Background);
+        }
+
+        private void FinishJob(PalSpecifierViewModel item, SolverJobViewModel job, SolverJobTerminalResult terminalResult)
+        {
+            VerifyDispatcherAccess();
+            if (!itemJobs.TryGetValue(item, out var currentJob) || currentJob != job)
                 return;
 
-            Dispatcher.CurrentDispatcher.BeginInvoke(() =>
+            job.ApplyTerminalResult(terminalResult);
+            itemJobs.Remove(item);
+            orderedPendingTargets.Remove(item);
+            JobFinished?.Invoke(this, new SolverJobFinishedEventArgs(job, terminalResult));
+            if (orderedPendingTargets.Count == 0)
+                queueDrained?.TrySetResult();
+            StartFirstRunnableJob();
+        }
+
+        private void StartFirstRunnableJob()
+        {
+            VerifyDispatcherAccess();
+            var firstItem = orderedPendingTargets.FirstOrDefault(item => !itemJobs[item].IsTerminal);
+            if (firstItem == null)
+                return;
+
+            foreach (var (item, job) in itemJobs)
             {
-                if (!orderedPendingTargets.Contains(item))
-                    return;
+                if (item != firstItem && job.LifecycleState == SolverJobLifecycleState.Running)
+                    job.Pause();
+            }
 
-                if (job.CurrentState == SolverState.Running && orderedPendingTargets[0] != item)
-                    orderedPendingTargets.Move(orderedPendingTargets.IndexOf(item), 0);
-            });
-        }
-
-        private void Job_JobStopped(SolverJobViewModel obj)
-        {
-            orderedPendingTargets.Remove(obj.Specifier);
-
-            obj.PropertyChanged -= Job_PropertyChanged;
-            obj.JobStopped -= Job_JobStopped;
+            if (itemJobs[firstItem].LifecycleState is SolverJobLifecycleState.Queued or SolverJobLifecycleState.Paused)
+                _ = itemJobs[firstItem].RunAsync();
         }
 
         public void DragOver(IDropInfo dropInfo)
@@ -174,14 +151,7 @@ namespace PalCalc.UI.ViewModel.Solver
 
             var sourceItem = dropInfo.Data as PalSpecifierViewModel;
             var targetItem = dropInfo.TargetItem as PalSpecifierViewModel;
-
-            if (
-                sourceItem != null &&
-                targetItem != null &&
-                sourceItem != targetItem &&
-                !targetItem.IsReadOnly &&
-                QueuedItems.Contains(sourceItem)
-            )
+            if (sourceItem != null && targetItem != null && sourceItem != targetItem && !targetItem.IsReadOnly && QueuedItems.Contains(sourceItem))
             {
                 dropInfo.DropTargetAdorner = DropTargetAdorners.Insert;
                 dropInfo.Effects = DragDropEffects.Move;
@@ -190,20 +160,28 @@ namespace PalCalc.UI.ViewModel.Solver
 
         public void Drop(IDropInfo dropInfo)
         {
+            VerifyDispatcherAccess();
             var sourceItem = dropInfo.Data as PalSpecifierViewModel;
             var targetItem = dropInfo.TargetItem as PalSpecifierViewModel;
-
-            if (!QueuedItems.Contains(sourceItem) || !QueuedItems.Contains(targetItem)) return;
+            if (!QueuedItems.Contains(sourceItem) || !QueuedItems.Contains(targetItem))
+                return;
 
             var sourceIndex = QueuedItems.IndexOf(sourceItem);
             var targetIndex = QueuedItems.IndexOf(targetItem);
+            var newIndex = dropInfo.InsertIndex;
+            if (sourceIndex < targetIndex)
+                newIndex--;
+            if (sourceIndex == newIndex)
+                return;
 
-            int newIndex = dropInfo.InsertIndex;
-            if (sourceIndex < targetIndex) newIndex -= 1;
+            orderedPendingTargets.Move(sourceIndex, Math.Clamp(newIndex, 0, QueuedItems.Count - 1));
+            StartFirstRunnableJob();
+        }
 
-            if (sourceIndex == newIndex) return;
-
-            orderedPendingTargets.Move(QueuedItems.IndexOf(sourceItem), Math.Clamp(newIndex, 0, QueuedItems.Count - 1));
+        private void VerifyDispatcherAccess()
+        {
+            if (!dispatcher.CheckAccess())
+                throw new InvalidOperationException("Solver queue state must be changed on its owning dispatcher.");
         }
     }
 }

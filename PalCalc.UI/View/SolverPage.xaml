@@ -144,6 +144,11 @@
                     <StackPanel DockPanel.Dock="Bottom"
                                 Visibility="{Binding PalTarget.CurrentPalSpecifier.LatestJob, Converter={StaticResource VVC}, FallbackValue=Collapsed, Mode=OneWay}"
                                 >
+                        <TextBlock Text="{Binding PalTarget.CurrentPalSpecifier.SolverErrorMessage.Value}"
+                                   Foreground="{DynamicResource {x:Static adonisUi:Brushes.AlertBrush}}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,5"
+                                   Visibility="{Binding PalTarget.CurrentPalSpecifier.SolverErrorMessage, Converter={StaticResource VVC}, FallbackValue=Collapsed}" />
                         <Grid Margin="0,0,0,2">
                             <ProgressBar Height="22" Value="{Binding PalTarget.CurrentPalSpecifier.LatestJob.SolverProgress, Mode=OneWay}" adonisExtensions:ProgressBarExtension.IsProgressAnimationEnabled="False" />
                             <TextBlock Text="{Binding PalTarget.CurrentPalSpecifier.LatestJob.SolverStatusMessage.Value}" Style="{StaticResource ProgressOverlayTextStyle}" />

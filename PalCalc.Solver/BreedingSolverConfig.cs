@@ -11,14 +11,19 @@ namespace PalCalc.Solver
     public class SolverStateController
     {
         public CancellationToken CancellationToken { get; set; }
-        public bool IsPaused { get; private set; }
+        private readonly ManualResetEventSlim resumeGate = new(initialState: true);
 
-        public void Pause() => IsPaused = true;
-        public void Resume() => IsPaused = false;
+        public bool IsPaused => !resumeGate.IsSet;
+
+        public void Pause() => resumeGate.Reset();
+        public void Resume() => resumeGate.Set();
 
         internal void PauseIfRequested()
         {
-            while (IsPaused) Thread.Sleep(10);
+            while (!resumeGate.Wait(millisecondsTimeout: 10))
+                CancellationToken.ThrowIfCancellationRequested();
+
+            CancellationToken.ThrowIfCancellationRequested();
         }
     }
 

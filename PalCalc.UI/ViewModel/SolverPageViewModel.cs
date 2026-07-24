@@ -7,6 +7,7 @@ using PalCalc.SaveReader;
 using PalCalc.UI.Localization;
 using PalCalc.UI.Model;
 using PalCalc.UI.Model.Persistence;
+using PalCalc.UI.View;
 using PalCalc.UI.View.Inspector;
 using PalCalc.UI.ViewModel.Inspector;
 using PalCalc.UI.ViewModel.Mapped;
@@ -65,6 +66,8 @@ namespace PalCalc.UI.ViewModel
         private Action<PassiveSkillsPresetViewModel> presetSelectedHandler;
         private readonly DebouncedAction targetListSaveDebouncer;
         private PalTargetListViewModel pendingTargetListSave;
+        private bool solverCancellationInProgress;
+        private bool isClosingAfterSolverCancellation;
 
         public ICommand RunSolverCommand { get; }
         public ICommand PauseSolverCommand { get; }
@@ -100,7 +103,7 @@ namespace PalCalc.UI.ViewModel
             }
         }
 
-        public SolverQueueViewModel SolverQueue { get; } = new SolverQueueViewModel();
+        public SolverQueueViewModel SolverQueue { get; }
 
         public CommonSaveOperationsViewModel SaveOperations { get; }
 
@@ -108,6 +111,7 @@ namespace PalCalc.UI.ViewModel
         public SolverPageViewModel(Dispatcher dispatcher, CommonSaveOperationsViewModel saveOperations, SaveGameViewModel selectedSave, PalTargetListViewModel targets)
         {
             this.dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
+            SolverQueue = new SolverQueueViewModel(this.dispatcher);
             OpenedSave = selectedSave;
             targetListSaveDebouncer = new DebouncedAction(
                 this.dispatcher,
@@ -133,13 +137,15 @@ namespace PalCalc.UI.ViewModel
                 {
                     appExitHandler = (o, e) =>
                     {
-                        foreach (var target in SolverQueue.QueuedItems)
-                            target.LatestJob.Cancel();
+                        SolverQueue.CancelAll();
                     };
                     App.Current.Exit += appExitHandler;
 
                     mainWindowClosingHandler = (o, e) =>
                     {
+                        if (isClosingAfterSolverCancellation)
+                            return;
+
                         if (SolverQueue.QueuedItems.Count == 0)
                             return;
 
@@ -148,6 +154,14 @@ namespace PalCalc.UI.ViewModel
                         if (AdonisMessageBox.Show(App.Current.MainWindow, msg, title, AdonisMessageBoxButton.YesNo) == AdonisMessageBoxResult.No)
                         {
                             e.Cancel = true;
+                            return;
+                        }
+
+                        e.Cancel = true;
+                        if (!solverCancellationInProgress)
+                        {
+                            solverCancellationInProgress = true;
+                            _ = dispatcher.BeginInvoke(BeginSolverCancellationAndClose, DispatcherPriority.ContextIdle);
                         }
                     };
                     App.Current.MainWindow.Closing += mainWindowClosingHandler;
@@ -387,6 +401,8 @@ namespace PalCalc.UI.ViewModel
 
             var originalSolverSettings = SolverControls.AsModel;
             var originalGameSettings = SelectedGameSettings.ModelObject;
+            initialSpec.SolverErrorMessage = null;
+            currentSpec.SolverErrorMessage = null;
             var job = new SolverJobViewModel(
                 dispatcher,
                 SolverControls.ConfiguredSolver(originalGameSettings, PalTarget.AvailablePals.ToList()),
@@ -394,8 +410,28 @@ namespace PalCalc.UI.ViewModel
                 cachedData.StateId
             );
 
-            job.JobCompleted += (job) =>
+            EventHandler<SolverJobFinishedEventArgs> jobFinished = null;
+            jobFinished = (_, eventArgs) =>
             {
+                if (eventArgs.Job != job)
+                    return;
+
+                SolverQueue.JobFinished -= jobFinished;
+                if (eventArgs.Result.Outcome == SolverJobOutcome.Cancelled)
+                {
+                    initialSpec.LatestJob = null;
+                    currentSpec.LatestJob = null;
+                    return;
+                }
+
+                if (eventArgs.Result.Outcome == SolverJobOutcome.Failed)
+                {
+                    var failureMessage = LocalizationCodes.LC_SOLVER_FAILED.Bind();
+                    initialSpec.SolverErrorMessage = failureMessage;
+                    currentSpec.SolverErrorMessage = failureMessage;
+                    return;
+                }
+
                 currentSpec.CurrentResults = new BreedingResultListViewModel()
                 {
                     Results = job.Results.Select(r => new BreedingResultViewModel(cachedData, originalGameSettings, r)).ToList(),
@@ -405,6 +441,8 @@ namespace PalCalc.UI.ViewModel
                         SolverSettings = originalSolverSettings
                     }
                 };
+                initialSpec.SolverErrorMessage = null;
+                currentSpec.SolverErrorMessage = null;
 
                 if (job.SaveStateId != cachedData.StateId)
                 {
@@ -427,12 +465,7 @@ namespace PalCalc.UI.ViewModel
                 SaveTarget(currentSpec);
                 QueueTargetListSave(PalTargetList);
             };
-
-            job.JobCancelled += (job) =>
-            {
-                initialSpec.LatestJob = null;
-                currentSpec.LatestJob = null;
-            };
+            SolverQueue.JobFinished += jobFinished;
 
             // initialSpec is the original target stored in the pal target list; assign latest job so it can show busy/paused/idle state
             initialSpec.LatestJob = job;
@@ -441,6 +474,21 @@ namespace PalCalc.UI.ViewModel
             currentSpec.LatestJob = job;
 
             SolverQueue.Run(currentSpec);
+        }
+
+        private void BeginSolverCancellationAndClose()
+        {
+            var mainWindow = App.Current.MainWindow;
+            if (mainWindow == null)
+                return;
+
+            var cancellationComplete = SolverQueue.CancelAndWaitAsync();
+            var modal = new SolverCancellationModal { Owner = mainWindow };
+            modal.ShowDialogUntil(cancellationComplete);
+
+            solverCancellationInProgress = false;
+            isClosingAfterSolverCancellation = true;
+            mainWindow.Close();
         }
 
         private void CancelSolver()

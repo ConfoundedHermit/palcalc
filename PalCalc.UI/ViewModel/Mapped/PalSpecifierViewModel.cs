@@ -129,6 +129,10 @@ namespace PalCalc.UI.ViewModel.Mapped
         [ObservableProperty]
         private BreedingResultListViewModel currentResults;
 
+        // Runtime-only terminal status; intentionally excluded from persisted target documents.
+        [ObservableProperty]
+        private ILocalizedText solverErrorMessage;
+
         [ObservableProperty]
         private PalGenderViewModel requiredGender;
 
@@ -207,6 +211,7 @@ namespace PalCalc.UI.ViewModel.Mapped
             }
         ) {
             CurrentResults = CurrentResults,
+            SolverErrorMessage = SolverErrorMessage,
             PalSourceSelections = PalSourceSelections,
             IncludeBasePals = IncludeBasePals,
             IncludeCustomPals = IncludeCustomPals,

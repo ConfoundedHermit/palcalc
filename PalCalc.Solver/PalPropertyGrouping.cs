@@ -84,6 +84,15 @@ namespace PalCalc.Solver
                 content[group] = filterFn(content[group]).ToList();
         }
 
+        public void FilterAll(FilterFunc filterFn, CancellationToken token)
+        {
+            foreach (var group in content.Keys)
+            {
+                token.ThrowIfCancellationRequested();
+                content[group] = filterFn(content[group]).ToList();
+            }
+        }
+
         public void FilterAll(PruningRulesBuilder prb, CancellationToken token)
         {
             var pruner = prb.BuildAggregate(token);

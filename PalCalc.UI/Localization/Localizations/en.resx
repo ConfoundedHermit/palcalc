@@ -352,6 +352,15 @@ Please find the generated ZIP file to send with any support questions:
   <data name="LC_JOB_QUEUE_HEADER" xml:space="preserve">
     <value>Jobs ({Count})</value>
   </data>
+  <data name="LC_SOLVER_CANCELLING_TITLE" xml:space="preserve">
+    <value>Cancelling solver jobs</value>
+  </data>
+  <data name="LC_SOLVER_CANCELLING_MESSAGE" xml:space="preserve">
+    <value>Waiting for solver jobs to stop. This may take a moment.</value>
+  </data>
+  <data name="LC_SOLVER_FAILED" xml:space="preserve">
+    <value>The solver stopped unexpectedly. You can run it again.</value>
+  </data>
   <data name="LC_LANGUAGE" xml:space="preserve">
     <value>Language</value>
   </data>
