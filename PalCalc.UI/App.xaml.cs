@@ -1,6 +1,7 @@
 ﻿using PalCalc.Model;
 using PalCalc.UI.Localization;
 using PalCalc.UI.Model;
+using PalCalc.UI.ViewModel;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -79,6 +80,12 @@ namespace PalCalc.UI
             Translator.Init();
 
             base.OnStartup(e);
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            SaveCustomizationsViewModel.FlushAll();
+            base.OnExit(e);
         }
 
         private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)

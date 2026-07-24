@@ -81,5 +81,6 @@ namespace PalCalc.UI.Model
 
         public BreedingResultListColumnSettings BreedingResultListColumns { get; set; } = new();
 
+        public string SkippedAppVersion { get; set; } = null;
     }
 }
