@@ -8,6 +8,7 @@ using System.Windows.Threading;
 namespace PalCalc.UI.Tests;
 
 [TestClass]
+[DoNotParallelize]
 public class SolverJobLifecycleTests
 {
     [TestMethod]

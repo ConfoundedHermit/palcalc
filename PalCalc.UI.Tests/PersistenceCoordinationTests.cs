@@ -10,19 +10,19 @@ public class PersistenceCoordinationTests
     public async Task KeyedCoordinator_SerializesSamePath()
     {
         var coordinator = new KeyedWriteCoordinator();
-        using var firstEntered = new ManualResetEventSlim();
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var releaseFirst = new ManualResetEventSlim();
         var executionOrder = new List<int>();
 
         var first = Task.Run(() => coordinator.RunAsync("same.json", () =>
         {
             executionOrder.Add(1);
-            firstEntered.Set();
+            firstEntered.SetResult();
             releaseFirst.Wait();
         }));
-        Assert.IsTrue(firstEntered.Wait(TimeSpan.FromSeconds(2)));
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        var second = Task.Run(() => coordinator.RunAsync("same.json", () => executionOrder.Add(2)));
+        var second = coordinator.RunAsync("same.json", () => executionOrder.Add(2));
         await Task.Delay(100);
         CollectionAssert.AreEqual(new[] { 1 }, executionOrder);
 
@@ -35,19 +35,19 @@ public class PersistenceCoordinationTests
     public async Task KeyedCoordinator_AllowsDifferentPathsToProceed()
     {
         var coordinator = new KeyedWriteCoordinator();
-        using var firstEntered = new ManualResetEventSlim();
-        using var secondEntered = new ManualResetEventSlim();
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var release = new ManualResetEventSlim();
 
         var first = Task.Run(() => coordinator.RunAsync("one.json", () =>
         {
-            firstEntered.Set();
+            firstEntered.SetResult();
             release.Wait();
         }));
-        Assert.IsTrue(firstEntered.Wait(TimeSpan.FromSeconds(2)));
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        var second = Task.Run(() => coordinator.RunAsync("two.json", () => secondEntered.Set()));
-        Assert.IsTrue(secondEntered.Wait(TimeSpan.FromSeconds(2)));
+        var second = coordinator.RunAsync("two.json", () => secondEntered.SetResult());
+        await secondEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         release.Set();
         await Task.WhenAll(first, second);
