@@ -1,4 +1,5 @@
-﻿using PalCalc.Solver.PalReference;
+using PalCalc.Solver.PalReference;
+using PalCalc.Solver.PalReference.Properties;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +11,7 @@ namespace PalCalc.Solver.ResultPruning
     /// <param name="maxIvDifference">
     /// Given a pal with the highest IVs, other pals will only be kept if their IVs differ by at most this much.
     /// </param>
-    public class OptimalIVsPruning(CancellationToken token, int maxIvDifference) : IResultPruning(token)
+    public class OptimalIVsPruning(CancellationToken token, int maxIvDifference) : ResultPruningRule(token)
     {
         static int TotalIVs(IV_Set ivs) => ivs.RelevantMaxTotal;
 
@@ -18,13 +19,20 @@ namespace PalCalc.Solver.ResultPruning
 
         public override IEnumerable<IPalReference> Apply(IEnumerable<IPalReference> results, CachedResultData cachedData)
         {
-            // note: all pals within a group being pruned should:
+            // Candidates in this group are expected to:
             //
             // - all have the same `IsRelevant` for each type of IV
             //   e.g. all HP will be relevant or all HP will be irrelevant
             //
-            //   (would be enforced by grouping with `WorkingSet.DefaultGroupFn`)
+            //   (enforced by `EffectivePropertiesKey`)
             //
+            // - have relevant IV ranges whose minimum and maximum both satisfy
+            //   the target threshold
+            //
+            //   (enforced by `InitialPalBuilder` for owned pals, wild IVs are
+            //   always irrelevant, surgery leaves IVs unchanged)
+            //
+
             // Unrequested IVs are retained for display, but must not influence which results
             // survive pruning. Compare only the highest values for requested IV categories.
 

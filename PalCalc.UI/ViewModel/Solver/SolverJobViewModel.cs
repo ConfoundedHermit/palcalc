@@ -2,7 +2,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using PalCalc.Model;
 using PalCalc.Solver;
 using PalCalc.Solver.PalReference;
+using PalCalc.Solver.Processing;
 using PalCalc.Solver.ResultPruning;
+using PalCalc.Solver.Utils;
 using PalCalc.UI.Localization;
 using PalCalc.UI.ViewModel.Mapped;
 using QuickGraph;
@@ -105,13 +107,24 @@ namespace PalCalc.UI.ViewModel.Solver
 
         public SolverJobViewModel(
             Dispatcher dispatcher,
-            BreedingSolver solver,
+            BreedingSolverRequest solverRequest,
             PalSpecifierViewModel spec,
             int saveStateId
-        ) : this(dispatcher, spec, saveStateId, solver.SolveFor)
+        )
         {
-            solver.SolverStateUpdated += OnSolverStateUpdated;
-            unsubscribeProgress = () => solver.SolverStateUpdated -= OnSolverStateUpdated;
+            this.dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+            ArgumentNullException.ThrowIfNull(solverRequest);
+            Specifier = spec ?? throw new ArgumentNullException(nameof(spec));
+            SaveStateId = saveStateId;
+
+            var solver = new BreedingSolver();
+            runner = (_, controller) => solver.Solve(solverRequest, controller).Results.ToList();
+            solver.StatusUpdated += OnSolverStateUpdated;
+            unsubscribeProgress = () => solver.StatusUpdated -= OnSolverStateUpdated;
+
+            solverController = new SolverStateController(tokenSource.Token);
+            LifecycleState = SolverJobLifecycleState.Queued;
+            CurrentState = SolverState.Paused;
         }
 
         internal SolverJobViewModel(
@@ -125,7 +138,7 @@ namespace PalCalc.UI.ViewModel.Solver
             this.runner = runner ?? throw new ArgumentNullException(nameof(runner));
             Specifier = spec ?? throw new ArgumentNullException(nameof(spec));
             SaveStateId = saveStateId;
-            solverController = new SolverStateController { CancellationToken = tokenSource.Token };
+            solverController = new SolverStateController(tokenSource.Token);
             LifecycleState = SolverJobLifecycleState.Queued;
             CurrentState = SolverState.Paused;
         }
@@ -260,16 +273,16 @@ namespace PalCalc.UI.ViewModel.Solver
         private List<IPalReference> SimplifyResults(List<IPalReference> results)
         {
             tokenSource.Token.ThrowIfCancellationRequested();
-            var resultsTable = new PalPropertyGrouping(PalProperty.Combine(
-                PalProperty.EffectivePassives,
-                PalProperty.NumBreedingSteps,
+            var resultsTable = new PalResultGrouping(PalResultProperty.Combine(
+                PalResultProperty.EffectivePassives,
+                PalResultProperty.NumBreedingSteps,
                 p => p.AllReferences().Select(r => r.Location.GetType()).Distinct().SetHash()
             ));
             resultsTable.AddRange(results);
-            resultsTable.FilterAll(PruningRulesBuilder.Default, tokenSource.Token);
+            resultsTable.FilterAll(ResultPruningPolicy.Default, tokenSource.Token);
 
             tokenSource.Token.ThrowIfCancellationRequested();
-            resultsTable = resultsTable.BuildNew(PalProperty.EffectivePassives);
+            resultsTable = resultsTable.BuildNew(PalResultProperty.EffectivePassives);
             resultsTable.FilterAll(g =>
             {
                 var nonZero = g.Where(r => r.BreedingEffort > TimeSpan.Zero).ToList();
@@ -300,8 +313,8 @@ namespace PalCalc.UI.ViewModel.Solver
                 CurrentPhase = status.CurrentPhase,
                 CurrentStepIndex = status.CurrentStepIndex,
                 TargetSteps = status.TargetSteps,
-                Canceled = status.Canceled,
-                Paused = status.Paused,
+                IsCanceled = status.IsCanceled,
+                IsPaused = status.IsPaused,
                 CurrentWorkSize = status.CurrentWorkSize,
                 WorkProcessedCount = status.WorkProcessedCount,
                 TotalWorkProcessedCount = status.TotalWorkProcessedCount,
@@ -343,7 +356,7 @@ namespace PalCalc.UI.ViewModel.Solver
                     lastStepIndex = status.CurrentStepIndex;
                     break;
                 case SolverPhase.Finished:
-                    if (!status.Canceled)
+                    if (!status.IsCanceled)
                     {
                         SolverStatusMessage = LocalizationCodes.LC_SOLVER_STATUS_FINISHED.Bind(stopwatch.Elapsed.TimeSpanSecondsStr());
                         overallStep = (int)numTotalSteps;

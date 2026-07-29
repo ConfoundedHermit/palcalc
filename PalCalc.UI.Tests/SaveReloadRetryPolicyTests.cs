@@ -34,7 +34,7 @@ public class SaveReloadRetryPolicyTests
         var attempts = 0;
         var policy = new SaveReloadRetryPolicy(delays.Add);
 
-        var exception = Assert.ThrowsException<InvalidDataException>(() => policy.Execute<object>(() =>
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => policy.Execute<object>(() =>
         {
             attempts++;
             throw new InvalidDataException("partial save");

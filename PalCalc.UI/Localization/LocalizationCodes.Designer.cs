@@ -696,6 +696,10 @@ namespace PalCalc.UI.Localization {
         /// </summary>
         LC_REQUIRED_TRAITS_SUMMARY,
         /// <summary>
+        ///   Looks up a localized string similar to .
+        /// </summary>
+        LC_RESET_UI_LAYOUT,
+        /// <summary>
         ///   Looks up a localized string similar to AvgAttempts.
         /// </summary>
         LC_RESULT_BREEDING_ATTEMPTS,
@@ -1251,6 +1255,10 @@ namespace PalCalc.UI.Localization {
         ///   Looks up a localized string similar to .
         /// </summary>
         LC_TRAITS_SEARCH_TITLE,
+        /// <summary>
+        ///   Looks up a localized string similar to .
+        /// </summary>
+        LC_UI_LAYOUT_RESET_NOTICE,
         /// <summary>
         ///   Looks up a localized string similar to .
         /// </summary>

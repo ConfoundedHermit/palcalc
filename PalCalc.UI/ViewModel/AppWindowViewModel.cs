@@ -11,6 +11,7 @@ using PalCalc.UI.View;
 using PalCalc.UI.ViewModel.Mapped;
 using PalCalc.UI.ViewModel.Mapped.Saves;
 using PalCalc.UI.ViewModel.SaveSelection;
+using PalCalc.UI.ViewModel.Solver;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -203,7 +204,8 @@ namespace PalCalc.UI.ViewModel
 
         private PalTargetListViewModel LoadPalTargets(SaveGameViewModel sg)
         {
-            if (Storage.DEBUG_DisableStorage) return new PalTargetListViewModel();
+            if (Storage.DEBUG_DisableStorage)
+                return new PalTargetListViewModel(new PalSourceViewModel(sg, null));
 
             try
             {
@@ -236,17 +238,18 @@ namespace PalCalc.UI.ViewModel
                             item => JsonConvert.SerializeObject(item, vmEntryConverter));
                     }
 
-                    var result = new PalTargetListViewModel(oldTargets);
+                    var result = new PalTargetListViewModel(new PalSourceViewModel(sg, null), oldTargets);
                     Storage.SaveUserDocument(
                         targetIdsPath,
                         result,
                         item => JsonConvert.SerializeObject(item,
-                            new PalTargetListViewModelConverter(db, gameSettings, originalCachedSave, oldTargets.ToDictionary(t => t.Id))));
+                            new PalTargetListViewModelConverter(db, gameSettings, sg, originalCachedSave, oldTargets.ToDictionary(t => t.Id))));
                     Storage.ArchiveMigratedUserDocument(legacyTargetsPath);
                     return result;
                 }
 
-                if (!File.Exists(targetIdsPath)) return new PalTargetListViewModel();
+                if (!File.Exists(targetIdsPath))
+                    return new PalTargetListViewModel(new PalSourceViewModel(sg, null));
 
                 var targetFiles = Directory.Exists(targetsFolder) ? Directory.EnumerateFiles(targetsFolder, "*.json") : [];
                 var entryConverter = new PalSpecifierViewModelConverter(db, gameSettings, originalCachedSave);
@@ -265,7 +268,7 @@ namespace PalCalc.UI.ViewModel
                     return null;
                 }).SkipNull().ToList();
 
-                var converter = new PalTargetListViewModelConverter(db, gameSettings, originalCachedSave, targetEntries.ToDictionary(e => e.Id));
+                var converter = new PalTargetListViewModelConverter(db, gameSettings, sg, originalCachedSave, targetEntries.ToDictionary(e => e.Id));
                 var targetList = Storage.LoadUserDocument(
                     targetIdsPath,
                     json => JsonConvert.DeserializeObject<PalTargetListViewModel>(json, [converter]),
@@ -280,7 +283,7 @@ namespace PalCalc.UI.ViewModel
             {
                 logger.Error(ex, "failed to load target data for {saveId}", CachedSaveGame.IdentifierFor(sg.Value));
                 RecordFailedSaveLoad(sg.Value);
-                return new PalTargetListViewModel();
+                return new PalTargetListViewModel(new PalSourceViewModel(sg, null));
             }
         }
 

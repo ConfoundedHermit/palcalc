@@ -26,6 +26,8 @@ namespace PalCalc.Model
 
         public Dictionary<Pal, Dictionary<PalGender, float>> BreedingGenderProbability { get; set; }
 
+        public BreedingMechanics BreedingMechanics { get; set; }
+
         public List<PassiveSkill> PassiveSkills { get; set; }
 
         // passive skills which most users would expect, does *not* include passive effects

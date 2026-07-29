@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PalCalc.Model;
 using PalCalc.SaveReader;
+using PalCalc.Solver;
 using PalCalc.UI.Localization;
 using PalCalc.UI.Model;
 using PalCalc.UI.Model.Persistence;
@@ -46,7 +47,7 @@ namespace PalCalc.UI.ViewModel
                         Dispatcher.CurrentDispatcher,
                         CommonSaveOperationsViewModel.DesignerInstance,
                         SaveGameViewModel.DesignerInstance,
-                        new PalTargetListViewModel()
+                        new PalTargetListViewModel(new PalSourceViewModel(SaveGameViewModel.DesignerInstance, null))
                     );
                 }
 
@@ -168,7 +169,11 @@ namespace PalCalc.UI.ViewModel
                 }
             });
 
+            PalTargetList = targets;
+            PalTargetList.SourcePals.PropertyChanged += SourcePals_PropertyChanged;
+
             SolverControls = new SolverControlsViewModel(
+                sourcePals: PalTargetList.SourcePals,
                 runSolverCommand: RunSolverCommand,
                 cancelSolverCommand: CancelSolverCommand,
                 pauseSolverCommand: PauseSolverCommand,
@@ -177,8 +182,6 @@ namespace PalCalc.UI.ViewModel
             SolverControls.CopyFrom(settings.SolverSettings);
             solverControlsPropertyChangedHandler = SolverControls_PropertyChanged;
             SolverControls.PropertyChanged += solverControlsPropertyChangedHandler;
-
-            PalTargetList = targets;
             
             // TODO - would prefer to have the delete command managed by the target list, rather than having
             //        to manually assign the command for each specifier VM
@@ -208,6 +211,7 @@ namespace PalCalc.UI.ViewModel
 
             if (PalTargetList != null)
             {
+                PalTargetList.SourcePals.PropertyChanged -= SourcePals_PropertyChanged;
                 PalTargetList.PropertyChanged -= PalTargetList_PropertyChanged;
                 PalTargetList.OrderChanged -= QueueTargetListSave;
             }
@@ -241,6 +245,12 @@ namespace PalCalc.UI.ViewModel
         {
             settings.SolverSettings = SolverControls.AsModel;
             Storage.SaveAppSettings(settings);
+        }
+
+        private void SourcePals_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(PalSourceViewModel.AvailablePals))
+                QueueTargetListSave(PalTargetList);
         }
 
         private void PassivePresets_PresetSelected(PassiveSkillsPresetViewModel selectedPreset)
@@ -313,7 +323,7 @@ namespace PalCalc.UI.ViewModel
         {
             if (PalTargetList?.SelectedTarget != null)
             {
-                PalTarget = new PalTargetViewModel(OpenedSave, PalTargetList.SelectedTarget, passivePresets);
+                PalTarget = new PalTargetViewModel(OpenedSave, PalTargetList.SourcePals, PalTargetList.SelectedTarget, passivePresets);
                 passivePresets.ActivePalTarget = PalTarget;
             }
             else
@@ -358,7 +368,7 @@ namespace PalCalc.UI.ViewModel
                 Directory.CreateDirectory(outputFolder);
 
             var outputFile = Path.Join(outputFolder, "pal-target-ids.json");
-            var converter = new PalTargetListViewModelConverter(db, new GameSettings(), OpenedSave.CachedValue, list.Targets.Where(t => !t.IsReadOnly).ToDictionary(t => t.Id));
+            var converter = new PalTargetListViewModelConverter(db, new GameSettings(), OpenedSave, OpenedSave.CachedValue, list.Targets.Where(t => !t.IsReadOnly).ToDictionary(t => t.Id));
             Storage.SaveUserDocument(outputFile, list, item => JsonConvert.SerializeObject(item, converter));
         }
 
@@ -405,7 +415,13 @@ namespace PalCalc.UI.ViewModel
             currentSpec.SolverErrorMessage = null;
             var job = new SolverJobViewModel(
                 dispatcher,
-                SolverControls.ConfiguredSolver(originalGameSettings, PalTarget.AvailablePals.ToList()),
+                new BreedingSolverRequest(
+                    currentSpec.ModelObject,
+                    SolverControls.ConfiguredSolverSettings(
+                        originalGameSettings,
+                        PalTargetList.SourcePals.AvailablePals.ToList()
+                    )
+                ),
                 currentSpec,
                 cachedData.StateId
             );

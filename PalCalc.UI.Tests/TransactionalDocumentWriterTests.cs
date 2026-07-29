@@ -27,7 +27,7 @@ public class TransactionalDocumentWriterTests
         File.WriteAllText(primaryPath, "old complete document");
         var fileOperations = new ReplaceFailingFileOperations();
 
-        var exception = Assert.ThrowsException<TransactionalDocumentWriteException>(
+        var exception = Assert.ThrowsExactly<TransactionalDocumentWriteException>(
             () => TransactionalDocumentWriter.Write(primaryPath, "new complete document", value => value, fileOperations));
 
         Assert.AreEqual("old complete document", File.ReadAllText(primaryPath));
@@ -68,7 +68,7 @@ public class TransactionalDocumentWriterTests
         var primaryPath = directory.FilePath("settings.json");
         File.WriteAllText(primaryPath, "old complete document");
 
-        Assert.ThrowsException<InvalidOperationException>(
+        Assert.ThrowsExactly<InvalidOperationException>(
             () => TransactionalDocumentWriter.Write(primaryPath, "new document", _ => throw new InvalidOperationException("Injected serialization failure.")));
 
         Assert.AreEqual("old complete document", File.ReadAllText(primaryPath));
